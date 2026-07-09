@@ -51,6 +51,11 @@ def get_dashscope_client() -> ModuleType:
         )
 
     dashscope.api_key = api_key
+
+    # Apply an endpoint override when configured (e.g. international region).
+    if settings.dashscope_base_url:
+        dashscope.base_http_api_url = settings.dashscope_base_url
+
     return dashscope
 
 

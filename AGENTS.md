@@ -69,8 +69,12 @@ sessions, dashboard, deployment, tests) are **not** implemented yet.
   `Settings.dashscope_api_key` / the `DASHSCOPE_API_KEY` env var).
 - **Region gotcha:** the provided key is for the **international** region. The
   SDK defaults to the Beijing endpoint, which returns `401 InvalidApiKey`. Set
-  `dashscope.base_http_api_url = "https://dashscope-intl.aliyuncs.com/api/v1"`
-  before calling (Singapore/intl endpoint) for the key to authenticate.
+  the endpoint via the `DASHSCOPE_BASE_URL` env/`.env` var (e.g.
+  `https://dashscope-intl.aliyuncs.com/api/v1`); `get_dashscope_client()` applies
+  it automatically. In the cloud dev VM `.env` already sets this, so app
+  processes (server, worker) authenticate without extra steps. Standalone
+  scripts that don't go through `get_dashscope_client()` before calling still
+  need to set `dashscope.base_http_api_url` themselves.
 - **Model gotcha:** the roadmap's `qwen3-plus` returns `400 InvalidParameter:
   Model not exist` on this account. `qwen-plus` works and returns tool/function
   calls (`result_format="message"` → `output.choices[0].message.tool_calls`).

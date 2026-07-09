@@ -10,6 +10,7 @@ from fastapi import FastAPI
 from pydantic import BaseModel
 
 from app import __version__
+from app.api.chat import router as chat_router
 from app.config import Settings, get_settings
 from app.core.database import get_db  # noqa: F401  (exposed for later routes)
 
@@ -44,6 +45,8 @@ def create_app() -> FastAPI:
 
         _ = settings  # configuration is loaded/validated at startup
         return HealthResponse(status="ok", service="memoria", version=__version__)
+
+    application.include_router(chat_router)
 
     return application
 
