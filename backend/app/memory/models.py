@@ -10,7 +10,17 @@ from datetime import datetime
 from uuid import UUID, uuid4
 
 from pgvector.sqlalchemy import Vector
-from sqlalchemy import DateTime, Float, ForeignKey, Index, String, Text, func
+from sqlalchemy import (
+    Boolean,
+    DateTime,
+    Float,
+    ForeignKey,
+    Index,
+    String,
+    Text,
+    func,
+    text,
+)
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.ext.asyncio import AsyncAttrs
@@ -64,6 +74,10 @@ class Memory(Base):
     # ``metadata``. ``default=dict`` avoids sharing one mutable dict across rows.
     meta_data: Mapped[dict] = mapped_column(
         "metadata", JSONB, nullable=False, default=dict
+    )
+    # Soft-delete flag used by the forgetting/consolidation engine.
+    archived: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default=text("false")
     )
 
     def __repr__(self) -> str:

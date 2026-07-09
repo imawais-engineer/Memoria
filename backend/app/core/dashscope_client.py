@@ -109,6 +109,49 @@ async def call_qwen_with_functions(
     return response
 
 
+async def call_qwen_chat(
+    messages: list[dict[str, Any]],
+    model: str = DEFAULT_MODEL,
+) -> str:
+    """Call Qwen for a plain text completion and return the message content.
+
+    Awaitable wrapper over the sync ``Generation.call``. Logs and raises
+    ``RuntimeError`` on a non-OK status or SDK error.
+    """
+
+    client = get_dashscope_client()
+
+    def _invoke() -> Any:
+        return client.Generation.call(
+            model=model,
+            messages=messages,
+            result_format="message",
+        )
+
+    try:
+        response = await asyncio.to_thread(_invoke)
+    except Exception:  # noqa: BLE001 - log context then re-raise
+        logger.exception("DashScope Generation.call (chat) failed (model=%s)", model)
+        raise
+
+    status_code = getattr(response, "status_code", HTTPStatus.OK)
+    if status_code != HTTPStatus.OK:
+        code = getattr(response, "code", None)
+        message = getattr(response, "message", None)
+        logger.error(
+            "DashScope chat returned non-OK status %s (code=%s): %s",
+            status_code,
+            code,
+            message,
+        )
+        raise RuntimeError(
+            f"DashScope chat failed with status {status_code} "
+            f"(code={code}): {message}"
+        )
+
+    return response.output["choices"][0]["message"]["content"]
+
+
 async def get_embedding(
     text_input: str,
     model: str = DEFAULT_EMBEDDING_MODEL,

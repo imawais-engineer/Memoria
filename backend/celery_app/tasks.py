@@ -10,6 +10,8 @@ import asyncio
 import logging
 
 from app.core.database import async_session
+from app.memory.consolidation import consolidate_memories
+from app.memory.forgetting import apply_decay
 from app.memory.ingestion import extract_and_store_memories
 from celery_app import celery_app
 
@@ -35,3 +37,25 @@ def extract_memories_task(
             )
 
     asyncio.run(_run())
+
+
+@celery_app.task(name="decay_memories_task")
+def decay_memories_task() -> dict[str, int]:
+    """Daily (Celery Beat, 03:00 UTC) importance decay + archival."""
+
+    async def _run() -> dict[str, int]:
+        async with async_session() as session:
+            return await apply_decay(session)
+
+    return asyncio.run(_run())
+
+
+@celery_app.task(name="consolidate_memories_task")
+def consolidate_memories_task() -> dict[str, int]:
+    """Weekly (Celery Beat, Sun 04:00 UTC) clustering + summarization."""
+
+    async def _run() -> dict[str, int]:
+        async with async_session() as session:
+            return await consolidate_memories(session)
+
+    return asyncio.run(_run())

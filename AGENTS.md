@@ -54,6 +54,9 @@ sessions, dashboard, deployment, tests) are **not** implemented yet.
   **not** installed by default on the VM.
 - Start a worker **from `backend/`**: `celery -A celery_app worker --loglevel=info`.
   Enqueue with `extract_memories_task.delay(conversation_text, user_id, message_id)`.
+- Scheduled jobs need Celery Beat: `celery -A celery_app beat --loglevel=info`.
+  Beat schedule: `decay_memories_task` daily 03:00 UTC, `consolidate_memories_task`
+  weekly Sun 04:00 UTC (both open their own async session).
 - **Env gotcha:** injected secrets (e.g. `DASHSCOPE_API_KEY`) reach normally
   launched processes via env vars, but a worker started in a *separate* shell
   (e.g. tmux) may not inherit them. Put keys in the repo-root `.env` (gitignored,
