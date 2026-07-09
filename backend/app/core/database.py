@@ -32,6 +32,9 @@ AsyncSessionLocal: async_sessionmaker[AsyncSession] = async_sessionmaker(
     expire_on_commit=False,
 )
 
+# Alias for callers (e.g. Celery tasks) that import ``async_session``.
+async_session = AsyncSessionLocal
+
 
 async def get_db() -> AsyncGenerator[AsyncSession, None]:
     """Yield an async database session, ensuring it is closed afterwards.

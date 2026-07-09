@@ -47,6 +47,19 @@ sessions, dashboard, deployment, tests) are **not** implemented yet.
   `CREATE EXTENSION IF NOT EXISTS vector` before creating vector-typed tables.
   `CREATE EXTENSION` requires a superuser role.
 
+### Celery workers (`celery_app/`)
+
+- Background tasks (memory ingestion) use Celery with **Redis** as broker +
+  result backend (`REDIS_URL`, default `redis://localhost:6379/0`). Redis is
+  **not** installed by default on the VM.
+- Start a worker **from `backend/`**: `celery -A celery_app worker --loglevel=info`.
+  Enqueue with `extract_memories_task.delay(conversation_text, user_id, message_id)`.
+- **Env gotcha:** injected secrets (e.g. `DASHSCOPE_API_KEY`) reach normally
+  launched processes via env vars, but a worker started in a *separate* shell
+  (e.g. tmux) may not inherit them. Put keys in the repo-root `.env` (gitignored,
+  read by `app/config.py`) or export them in the worker's shell, otherwise tasks
+  fail with `401 InvalidApiKey: No API-key provided`.
+
 ### DashScope / Qwen (`app/core/dashscope_client.py`)
 
 - Live Qwen calls need the `DASHSCOPE_API_KEY` secret (picked up by
