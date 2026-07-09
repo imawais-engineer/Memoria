@@ -26,6 +26,9 @@ logger = logging.getLogger(__name__)
 # Default Qwen model used for memory extraction / tool calling.
 DEFAULT_MODEL = "qwen3-plus"
 
+# Default embedding model.
+DEFAULT_EMBEDDING_MODEL = "text-embedding-v3"
+
 
 def get_dashscope_client() -> ModuleType:
     """Configure and return the DashScope module.
@@ -104,3 +107,42 @@ async def call_qwen_with_functions(
         )
 
     return response
+
+
+async def get_embedding(
+    text_input: str,
+    model: str = DEFAULT_EMBEDDING_MODEL,
+) -> list[float]:
+    """Return the embedding vector for ``text_input`` using DashScope.
+
+    Wraps the synchronous ``TextEmbedding.call`` in a worker thread. Logs and
+    raises ``RuntimeError`` on a non-OK status or SDK error.
+    """
+
+    client = get_dashscope_client()
+
+    def _invoke() -> Any:
+        return client.TextEmbedding.call(model=model, input=text_input)
+
+    try:
+        response = await asyncio.to_thread(_invoke)
+    except Exception:  # noqa: BLE001 - log context then re-raise
+        logger.exception("DashScope TextEmbedding.call failed (model=%s)", model)
+        raise
+
+    status_code = getattr(response, "status_code", HTTPStatus.OK)
+    if status_code != HTTPStatus.OK:
+        code = getattr(response, "code", None)
+        message = getattr(response, "message", None)
+        logger.error(
+            "DashScope embedding returned non-OK status %s (code=%s): %s",
+            status_code,
+            code,
+            message,
+        )
+        raise RuntimeError(
+            f"DashScope embedding failed with status {status_code} "
+            f"(code={code}): {message}"
+        )
+
+    return response.output["embeddings"][0]["embedding"]

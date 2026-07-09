@@ -58,6 +58,14 @@ sessions, dashboard, deployment, tests) are **not** implemented yet.
 - **Model gotcha:** the roadmap's `qwen3-plus` returns `400 InvalidParameter:
   Model not exist` on this account. `qwen-plus` works and returns tool/function
   calls (`result_format="message"` → `output.choices[0].message.tool_calls`).
+- **Embedding-dimension gotcha:** `text-embedding-v3` outputs **1024** dims
+  (only 512/768/1024 are valid), and `text-embedding-v2` (1536) is
+  `AccessDenied` on this account. But the `memories.embedding` column is
+  `Vector(1536)` (Module 2), so inserting a v3 embedding fails with
+  `asyncpg DataError: expected 1536 dimensions, not 1024`. To ingest for real,
+  align the two — change the model column to `Vector(1024)` (+ new migration) or
+  use a 1536-dim embedding model. The ingestion pipeline logic itself is
+  verified working once dimensions match.
 
 ### Intended stack (per `docs/MEMORIA_DEVELOPMENT_ROADMAP.md`)
 
