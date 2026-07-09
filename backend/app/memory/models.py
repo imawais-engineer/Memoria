@@ -16,8 +16,8 @@ from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.ext.asyncio import AsyncAttrs
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
-# Dimensionality of the embedding vectors (DashScope text-embedding-v3).
-EMBEDDING_DIM = 1536
+# Dimensionality of the embedding vectors (DashScope text-embedding-v3 -> 1024).
+EMBEDDING_DIM = 1024
 
 
 class Base(AsyncAttrs, DeclarativeBase):
