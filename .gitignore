@@ -38,3 +38,11 @@ alembic/versions/*.pyc
 # Node / frontend (added in later modules)
 node_modules/
 frontend/dist/
+
+# Terraform (keep .terraform.lock.hcl tracked)
+**/.terraform/*
+*.tfstate
+*.tfstate.*
+crash.log
+override.tf
+override.tf.json
