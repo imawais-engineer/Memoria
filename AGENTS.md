@@ -47,6 +47,18 @@ sessions, dashboard, deployment, tests) are **not** implemented yet.
   `CREATE EXTENSION IF NOT EXISTS vector` before creating vector-typed tables.
   `CREATE EXTENSION` requires a superuser role.
 
+### DashScope / Qwen (`app/core/dashscope_client.py`)
+
+- Live Qwen calls need the `DASHSCOPE_API_KEY` secret (picked up by
+  `Settings.dashscope_api_key` / the `DASHSCOPE_API_KEY` env var).
+- **Region gotcha:** the provided key is for the **international** region. The
+  SDK defaults to the Beijing endpoint, which returns `401 InvalidApiKey`. Set
+  `dashscope.base_http_api_url = "https://dashscope-intl.aliyuncs.com/api/v1"`
+  before calling (Singapore/intl endpoint) for the key to authenticate.
+- **Model gotcha:** the roadmap's `qwen3-plus` returns `400 InvalidParameter:
+  Model not exist` on this account. `qwen-plus` works and returns tool/function
+  calls (`result_format="message"` → `output.choices[0].message.tool_calls`).
+
 ### Intended stack (per `docs/MEMORIA_DEVELOPMENT_ROADMAP.md`)
 
 When implementation begins, the project is planned as:
