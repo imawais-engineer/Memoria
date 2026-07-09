@@ -11,6 +11,7 @@ from pydantic import BaseModel
 
 from app import __version__
 from app.config import Settings, get_settings
+from app.core.database import get_db  # noqa: F401  (exposed for later routes)
 
 
 class HealthResponse(BaseModel):
