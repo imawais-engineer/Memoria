@@ -43,6 +43,8 @@ class Settings(BaseSettings):
     database_url: str = "postgresql+asyncpg://user:pass@localhost/memoria"
     redis_url: str = "redis://localhost:6379/0"
     secret_key: str = "supersecret"
+    # Fixed token guarding destructive demo endpoints (e.g. DELETE /api/memories).
+    demo_api_token: str = "memoria-demo-token"
 
 
 @lru_cache(maxsize=1)

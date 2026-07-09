@@ -30,6 +30,19 @@ sessions, dashboard, deployment, tests) are **not** implemented yet.
   the app starts without a `.env` file. Later modules will require a
   `DASHSCOPE_API_KEY` secret plus Postgres (pgvector) and Redis.
 
+### Frontend (`frontend/`, admin dashboard)
+
+- Vite + React (JS) app. Run from `frontend/`: `npm run dev` (dev server on
+  port 5173). Vite proxies `/chat` and `/api` to the backend on port 8000
+  (see `vite.config.js`), so the frontend uses relative URLs — start the backend
+  too.
+- Tabs: **Chat** (calls `POST /chat`) and **Memory** (calls `GET /api/memories`
+  and `DELETE /api/memories/{id}`). Destructive `DELETE` requires the
+  `X-API-Token` header matching `DEMO_API_TOKEN` (default `memoria-demo-token`,
+  configurable via env); the frontend sends this automatically.
+- The backend also enables permissive CORS for dev, so the app works with or
+  without the Vite proxy.
+
 ### Database & migrations (Alembic)
 
 - DB-backed work (models, migrations) needs a local **PostgreSQL 16 with the
