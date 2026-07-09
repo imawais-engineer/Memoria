@@ -4,12 +4,31 @@
 
 ### Current repository state (IMPORTANT)
 
-This repository is **documentation-only** right now. It contains just:
+Module 1 (Project Scaffold & Environment Setup) is implemented. The Python
+backend lives under `backend/`:
 
-- `README.md`
-- `docs/MEMORIA_DEVELOPMENT_ROADMAP.md`
+- `backend/requirements.txt` — backend dependencies.
+- `backend/app/main.py` — FastAPI app exposing `GET /health`.
+- `backend/app/config.py` — `pydantic-settings` config; resolves `.env` from the
+  repo root regardless of the current working directory.
+- `backend/app/{api,core,memory,services,schemas}/` — package folders (currently
+  just `__init__.py`), populated by later modules.
 
-There is **no application code, no dependency manifest, no tests, no lint config, and no build system yet.** As the README states, implementation has not started ("Implementation starts with Module 1"). Consequently there is nothing to install, lint, test, build, or run until the code described in the roadmap is scaffolded.
+Modules 2–10 (database models, ingestion, retrieval, forgetting, chat API,
+sessions, dashboard, deployment, tests) are **not** implemented yet.
+
+### Running the backend (dev)
+
+- The update script installs `backend/requirements.txt`. If running by hand,
+  create a venv and `pip install -r backend/requirements.txt` (needs the
+  `python3.12-venv` system package for `python3 -m venv`).
+- Start the dev server **from the `backend/` directory** so the `app` package
+  imports resolve: `uvicorn app.main:app --reload --port 8000`.
+- Verify: `curl localhost:8000/health` returns `200` with
+  `{"status":"ok","service":"memoria","version":"0.1.0"}`. Swagger UI at `/docs`.
+- `/health` needs no external services or secrets; config has safe defaults, so
+  the app starts without a `.env` file. Later modules will require a
+  `DASHSCOPE_API_KEY` secret plus Postgres (pgvector) and Redis.
 
 ### Intended stack (per `docs/MEMORIA_DEVELOPMENT_ROADMAP.md`)
 
@@ -25,7 +44,7 @@ These services (Postgres+pgvector, Redis) and the `DASHSCOPE_API_KEY` secret wil
 
 ### Update script behavior
 
-The registered startup/update script is intentionally **guarded**: it installs Python deps only if a `requirements.txt` (root or `backend/`) exists, and Node deps only if a `package.json` (root or `frontend/`) exists. Today all guards are skipped because none of those files exist yet, so the script is a safe no-op. Once the roadmap layout is scaffolded, the same script will begin installing dependencies without further changes.
+The registered startup/update script is intentionally **guarded**: it installs Python deps only if a `requirements.txt` (root or `backend/`) exists, and Node deps only if a `package.json` (root or `frontend/`) exists. It now installs `backend/requirements.txt`. The `frontend/` guard remains a no-op until that module is added, so no changes are needed as more modules land.
 
 ### Base tooling available on the VM
 
