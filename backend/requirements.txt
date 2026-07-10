@@ -1,0 +1,16 @@
+fastapi
+uvicorn[standard]
+sqlalchemy
+asyncpg
+pgvector
+psycopg2-binary
+redis
+celery[redis]
+dashscope
+python-dotenv
+pydantic
+pydantic-settings
+alembic
+openai  # if using OpenAI-compatible dashscope endpoint
+httpx
+tiktoken  # token counting for retrieval context packing

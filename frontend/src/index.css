@@ -1,0 +1,177 @@
+:root {
+  --bg: #0f1220;
+  --panel: #171a2b;
+  --panel-2: #1e2238;
+  --border: #2a2f4a;
+  --text: #e7e9f3;
+  --muted: #9aa0b8;
+  --accent: #6c8cff;
+  --accent-2: #48d597;
+  --user-bubble: #6c8cff;
+  --assistant-bubble: #23283f;
+  --danger: #ff6b6b;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  font-family: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  background: radial-gradient(1200px 600px at 20% -10%, #1c2140 0%, var(--bg) 55%);
+  color: var(--text);
+  min-height: 100vh;
+}
+
+.app {
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 24px 16px 48px;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 4px;
+}
+
+.logo {
+  width: 38px;
+  height: 38px;
+  border-radius: 10px;
+  background: linear-gradient(135deg, var(--accent), var(--accent-2));
+  display: grid;
+  place-items: center;
+  font-weight: 800;
+  color: #0b0e1a;
+}
+
+.title { font-size: 22px; font-weight: 700; }
+.subtitle { color: var(--muted); font-size: 13px; margin-top: 2px; }
+
+.userbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 18px 0;
+  flex-wrap: wrap;
+}
+.userbar label { color: var(--muted); font-size: 13px; }
+.userbar input {
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  color: var(--text);
+  padding: 8px 10px;
+  border-radius: 8px;
+  min-width: 220px;
+}
+
+.tabs { display: flex; gap: 8px; margin-bottom: 16px; }
+.tab {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  color: var(--muted);
+  padding: 9px 18px;
+  border-radius: 10px;
+  cursor: pointer;
+  font-weight: 600;
+  transition: all .15s ease;
+}
+.tab:hover { color: var(--text); }
+.tab.active {
+  color: #fff;
+  border-color: var(--accent);
+  background: linear-gradient(180deg, rgba(108,140,255,.25), rgba(108,140,255,.08));
+}
+
+.panel {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 18px;
+}
+
+/* Chat */
+.chat-window {
+  height: 440px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 6px 4px;
+}
+.empty { color: var(--muted); text-align: center; margin: auto; }
+.bubble {
+  max-width: 76%;
+  padding: 10px 14px;
+  border-radius: 14px;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+}
+.bubble.user {
+  align-self: flex-end;
+  background: var(--user-bubble);
+  color: #0b0e1a;
+  border-bottom-right-radius: 4px;
+  font-weight: 500;
+}
+.bubble.assistant {
+  align-self: flex-start;
+  background: var(--assistant-bubble);
+  border: 1px solid var(--border);
+  border-bottom-left-radius: 4px;
+}
+.bubble.typing { color: var(--muted); font-style: italic; }
+
+.composer { display: flex; gap: 10px; margin-top: 14px; }
+.composer input {
+  flex: 1;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  color: var(--text);
+  padding: 12px 14px;
+  border-radius: 10px;
+  font-size: 14px;
+}
+.btn {
+  background: linear-gradient(135deg, var(--accent), #8aa2ff);
+  border: none;
+  color: #0b0e1a;
+  font-weight: 700;
+  padding: 12px 20px;
+  border-radius: 10px;
+  cursor: pointer;
+}
+.btn:disabled { opacity: .5; cursor: not-allowed; }
+
+/* Memory table */
+.table-tools { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+.refresh { background: var(--panel-2); border: 1px solid var(--border); color: var(--text); padding: 7px 14px; border-radius: 8px; cursor: pointer; }
+table { width: 100%; border-collapse: collapse; }
+th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--border); font-size: 13px; vertical-align: top; }
+th { color: var(--muted); font-weight: 600; }
+.badge {
+  display: inline-block;
+  padding: 2px 9px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+.badge.core { background: rgba(72,213,151,.18); color: var(--accent-2); }
+.badge.episodic { background: rgba(108,140,255,.18); color: var(--accent); }
+.badge.semantic { background: rgba(255,196,0,.18); color: #ffc400; }
+.badge.procedural { background: rgba(255,107,107,.18); color: var(--danger); }
+.forget {
+  background: transparent;
+  border: 1px solid var(--danger);
+  color: var(--danger);
+  padding: 5px 12px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: 600;
+}
+.forget:hover { background: var(--danger); color: #fff; }
+.muted { color: var(--muted); }
+.error { color: var(--danger); margin-top: 10px; }
