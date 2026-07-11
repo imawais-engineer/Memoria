@@ -88,6 +88,12 @@ class Memory(Base):
     archived: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=False, server_default=text("false")
     )
+    superseded: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default=text("false")
+    )
+    superseded_by: Mapped[UUID | None] = mapped_column(
+        PGUUID(as_uuid=True), ForeignKey("memories.id"), nullable=True
+    )
 
     def __repr__(self) -> str:
         return (

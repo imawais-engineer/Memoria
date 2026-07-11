@@ -19,6 +19,7 @@ from app.core.dashscope_client import (
     call_qwen_with_functions,
     get_embedding,
 )
+from app.memory.conflict_detection import detect_conflicts, resolve_conflict
 from app.memory.models import Memory
 
 logger = logging.getLogger(__name__)
@@ -42,6 +43,8 @@ DECAY_RATES: dict[str, float] = {
     "procedural": 0.005,
 }
 DEFAULT_DECAY_RATE = 0.01
+CONFLICT_IMPORTANCE_BOOST = 0.1
+AUTO_CONFLICT_RESOLUTION = "auto_superseded_on_ingestion"
 
 # Tool/function definition passed to Qwen, matching the roadmap schema.
 EXTRACT_MEMORIES_TOOL: list[dict[str, Any]] = [
@@ -194,6 +197,31 @@ async def extract_and_store_memories(
                 meta_data={"source_message_id": message_id},
             )
             db_session.add(memory)
+            await db_session.flush()
+
+            conflicts = await detect_conflicts(
+                db_session,
+                user_id,
+                content,
+                exclude_memory_id=memory.id,
+            )
+            if conflicts:
+                logger.warning(
+                    "Memory conflict detected for user_id=%s new_memory_id=%s "
+                    "conflicting_ids=%s",
+                    user_id,
+                    memory.id,
+                    [str(conflict.id) for conflict in conflicts],
+                )
+                memory.importance = min(1.0, importance + CONFLICT_IMPORTANCE_BOOST)
+                for conflict in conflicts:
+                    await resolve_conflict(
+                        db_session,
+                        str(conflict.id),
+                        str(memory.id),
+                        AUTO_CONFLICT_RESOLUTION,
+                    )
+
             created.append(memory)
 
         await db_session.commit()

@@ -84,6 +84,8 @@ async def retrieve_context(
     stmt = (
         select(Memory, score)
         .where(Memory.user_id == user_id)
+        .where(Memory.archived.is_(False))
+        .where(Memory.superseded.is_(False))
         .where(or_(Memory.expires_at.is_(None), Memory.expires_at > func.now()))
         .order_by(score.desc())
         .limit(CANDIDATE_LIMIT)
