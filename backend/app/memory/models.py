@@ -43,8 +43,11 @@ class Memory(Base):
 
     __tablename__ = "memories"
 
-    # Table-level composite index to speed up per-user, per-type lookups.
-    __table_args__ = (Index("ix_memories_user_id_type", "user_id", "type"),)
+    # Table-level indexes for common consolidation and type lookups.
+    __table_args__ = (
+        Index("ix_memories_user_id_type", "user_id", "type"),
+        Index("ix_user_consolidated", "user_id", "is_consolidated"),
+    )
 
     id: Mapped[UUID] = mapped_column(
         PGUUID(as_uuid=True), primary_key=True, default=uuid4
@@ -68,6 +71,12 @@ class Memory(Base):
     decay_rate: Mapped[float] = mapped_column(Float, default=0.01)
     parent_id: Mapped[UUID | None] = mapped_column(
         PGUUID(as_uuid=True), ForeignKey("memories.id"), nullable=True
+    )
+    is_consolidated: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default=text("false")
+    )
+    consolidated_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
     )
     # ``metadata`` is reserved by SQLAlchemy's Declarative API (``Base.metadata``),
     # so the Python attribute is ``meta_data`` while the DB column stays

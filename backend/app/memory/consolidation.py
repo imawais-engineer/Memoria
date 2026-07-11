@@ -1,9 +1,8 @@
 """Consolidation engine: cluster similar recent memories and summarize them.
 
-Weekly, for each user, recent ``episodic``/``semantic`` memories are clustered
-by pairwise cosine similarity. Any cluster with more than
-:data:`MIN_CLUSTER_SIZE` memories is summarized by Qwen-Max into a single new
-``semantic`` memory, and the originals are archived (soft-deleted).
+Non-consolidated memories from the past seven days are grouped by pgvector
+cosine similarity. Clusters of three or more are summarized by Qwen-Max into a
+single semantic memory; originals are linked to the summary via ``parent_id``.
 """
 
 from __future__ import annotations
@@ -12,28 +11,26 @@ import logging
 import math
 from datetime import datetime, timedelta, timezone
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.dashscope_client import call_qwen_chat, get_embedding
+from app.core.database import async_session
 from app.memory.models import Memory
 
 logger = logging.getLogger(__name__)
 
-# Model used to generate cluster summaries (per roadmap Module 5).
 CONSOLIDATION_MODEL = "qwen-max"
-
-# Cosine similarity above which two memories are considered part of a cluster.
-SIMILARITY_THRESHOLD = 0.8
-
-# Only clusters with strictly more than this many memories are consolidated.
+SIMILARITY_THRESHOLD = 0.75
 MIN_CLUSTER_SIZE = 3
-
-# Lookback window for memories eligible for consolidation.
 LOOKBACK_DAYS = 7
+SUMMARY_IMPORTANCE = 8.0
+SUMMARY_DECAY_RATE = 0.01
 
-# Decay rate assigned to a consolidated (semantic) summary memory.
-SEMANTIC_DECAY_RATE = 0.01
+CONSOLIDATION_SYSTEM_PROMPT = (
+    "You are a master memory consolidator. Synthesize these related memories "
+    "into ONE concise semantic memory (< 50 words) that captures the essence."
+)
 
 
 def _cosine_similarity(a: list[float], b: list[float]) -> float:
@@ -48,11 +45,7 @@ def _cosine_similarity(a: list[float], b: list[float]) -> float:
 
 
 def _cluster_memories(memories: list[Memory]) -> list[list[Memory]]:
-    """Greedy single-pass clustering by pairwise cosine similarity.
-
-    Each unassigned memory seeds a cluster and absorbs any remaining memory
-    whose similarity to the seed exceeds :data:`SIMILARITY_THRESHOLD`.
-    """
+    """Greedy clustering by pairwise cosine similarity above the threshold."""
 
     clusters: list[list[Memory]] = []
     used: set[int] = set()
@@ -68,7 +61,7 @@ def _cluster_memories(memories: list[Memory]) -> list[list[Memory]]:
                 continue
             if (
                 _cosine_similarity(seed_vec, list(memories[j].embedding))
-                > SIMILARITY_THRESHOLD
+                >= SIMILARITY_THRESHOLD
             ):
                 cluster.append(memories[j])
                 used.add(j)
@@ -77,105 +70,157 @@ def _cluster_memories(memories: list[Memory]) -> list[list[Memory]]:
     return clusters
 
 
-async def _summarize_cluster(cluster: list[Memory]) -> str:
-    """Ask Qwen-Max to summarize a cluster of memories into one statement."""
+async def _summarize_cluster(cluster: list[Memory]) -> str | None:
+    """Ask Qwen-Max to synthesize a cluster into one concise semantic memory."""
 
-    bullet_points = "\n".join(f"- {m.content}" for m in cluster)
+    bullet_points = "\n".join(f"- {memory.content}" for memory in cluster)
     messages = [
-        {
-            "role": "system",
-            "content": (
-                "You consolidate related memories about a user into a single, "
-                "concise factual summary. Respond with only the summary text."
-            ),
-        },
+        {"role": "system", "content": CONSOLIDATION_SYSTEM_PROMPT},
         {
             "role": "user",
-            "content": f"Summarize these related memories into one memory:\n{bullet_points}",
+            "content": f"Synthesize these memories:\n{bullet_points}",
         },
     ]
-    return (await call_qwen_chat(messages, model=CONSOLIDATION_MODEL)).strip()
+    try:
+        summary = (await call_qwen_chat(messages, model=CONSOLIDATION_MODEL)).strip()
+        return summary or None
+    except Exception:
+        logger.warning(
+            "Qwen consolidation call failed for cluster of %d memories; skipping",
+            len(cluster),
+            exc_info=True,
+        )
+        return None
 
 
-async def consolidate_memories(db_session: AsyncSession) -> dict[str, int]:
-    """Cluster and summarize recent memories per user.
+async def consolidate_memories(user_id: str) -> int:
+    """Consolidate non-consolidated memories for ``user_id`` using Qwen-Max clustering.
 
-    Returns a summary dict with the number of clusters consolidated and the
-    number of original memories archived. Commits via the provided session.
+    Fetches eligible memories from the past seven days, clusters them by
+    embedding similarity (>= 0.75), and for each cluster of three or more
+    creates a semantic summary memory. Originals are marked consolidated and
+    linked to the summary via ``parent_id``.
+
+    Returns the number of summary memories created.
     """
 
     cutoff = datetime.now(timezone.utc) - timedelta(days=LOOKBACK_DAYS)
+    summaries_created = 0
+    memories_consolidated = 0
 
-    users_stmt = (
-        select(Memory.user_id)
-        .where(
-            Memory.type.in_(["episodic", "semantic"]),
-            Memory.created_at >= cutoff,
-            Memory.archived.is_(False),
-        )
-        .distinct()
-    )
-    user_ids = [row[0] for row in (await db_session.execute(users_stmt)).all()]
-
-    clusters_consolidated = 0
-    memories_archived = 0
-
-    for user_id in user_ids:
-        mem_stmt = (
+    async with async_session() as db:
+        stmt = (
             select(Memory)
             .where(
                 Memory.user_id == user_id,
-                Memory.type.in_(["episodic", "semantic"]),
-                Memory.created_at >= cutoff,
+                Memory.is_consolidated.is_(False),
                 Memory.archived.is_(False),
+                Memory.created_at >= cutoff,
             )
             .order_by(Memory.created_at.asc())
         )
-        memories = list((await db_session.execute(mem_stmt)).scalars().all())
-        if len(memories) <= MIN_CLUSTER_SIZE:
-            continue
+        memories = list((await db.execute(stmt)).scalars().all())
+        if len(memories) < MIN_CLUSTER_SIZE:
+            logger.info(
+                "Consolidated 0 memories for user %s into 0 summaries", user_id
+            )
+            return 0
 
         for cluster in _cluster_memories(memories):
-            if len(cluster) <= MIN_CLUSTER_SIZE:
+            if len(cluster) < MIN_CLUSTER_SIZE:
                 continue
 
             summary_text = await _summarize_cluster(cluster)
             if not summary_text:
                 continue
 
-            avg_importance = sum(m.importance for m in cluster) / len(cluster)
-            oldest = min(cluster, key=lambda m: m.created_at)
-            embedding = await get_embedding(summary_text)
+            try:
+                embedding = await get_embedding(summary_text)
+            except Exception:
+                logger.warning(
+                    "Embedding failed for consolidation summary; skipping cluster",
+                    exc_info=True,
+                )
+                continue
 
             summary = Memory(
                 user_id=user_id,
                 type="semantic",
                 content=summary_text,
                 embedding=embedding,
-                importance=avg_importance,
-                decay_rate=SEMANTIC_DECAY_RATE,
-                parent_id=oldest.id,
+                importance=SUMMARY_IMPORTANCE,
+                decay_rate=SUMMARY_DECAY_RATE,
                 meta_data={
-                    "consolidated_from": [str(m.id) for m in cluster],
+                    "source": "consolidation",
+                    "consolidated_from": [str(memory.id) for memory in cluster],
                 },
             )
-            db_session.add(summary)
+            db.add(summary)
+            await db.flush()
 
+            now = datetime.now(timezone.utc)
             for memory in cluster:
-                memory.archived = True
+                memory.parent_id = summary.id
+                memory.is_consolidated = True
+                memory.consolidated_at = now
 
-            clusters_consolidated += 1
-            memories_archived += len(cluster)
+            summaries_created += 1
+            memories_consolidated += len(cluster)
 
-    await db_session.commit()
+        if summaries_created:
+            await db.commit()
+        else:
+            await db.rollback()
 
-    summary_stats = {
-        "clusters_consolidated": clusters_consolidated,
-        "memories_archived": memories_archived,
-    }
     logger.info(
-        "consolidate_memories: clusters=%d archived=%d",
-        clusters_consolidated,
-        memories_archived,
+        "Consolidated %d memories for user %s into %d summaries",
+        memories_consolidated,
+        user_id,
+        summaries_created,
     )
-    return summary_stats
+    return summaries_created
+
+
+async def get_consolidation_stats(user_id: str) -> dict[str, int]:
+    """Return consolidation statistics for ``user_id``."""
+
+    async with async_session() as db:
+        total_stmt = select(func.count()).select_from(Memory).where(
+            Memory.user_id == user_id,
+            Memory.archived.is_(False),
+        )
+        consolidated_stmt = select(func.count()).select_from(Memory).where(
+            Memory.user_id == user_id,
+            Memory.is_consolidated.is_(True),
+        )
+        summaries_stmt = select(func.count()).select_from(Memory).where(
+            Memory.user_id == user_id,
+            Memory.meta_data["source"].astext == "consolidation",
+        )
+
+        total_memories = (await db.execute(total_stmt)).scalar_one()
+        consolidated_count = (await db.execute(consolidated_stmt)).scalar_one()
+        summaries = (await db.execute(summaries_stmt)).scalar_one()
+
+    return {
+        "total_memories": total_memories,
+        "consolidated_count": consolidated_count,
+        "summaries": summaries,
+    }
+
+
+async def fetch_active_user_ids(lookback_days: int = LOOKBACK_DAYS) -> list[str]:
+    """Return user IDs with non-consolidated memories in the lookback window."""
+
+    cutoff = datetime.now(timezone.utc) - timedelta(days=lookback_days)
+    async with async_session() as db:
+        stmt = (
+            select(Memory.user_id)
+            .where(
+                Memory.is_consolidated.is_(False),
+                Memory.archived.is_(False),
+                Memory.created_at >= cutoff,
+            )
+            .distinct()
+        )
+        return [row[0] for row in (await db.execute(stmt)).all()]

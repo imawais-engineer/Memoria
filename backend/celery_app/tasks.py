@@ -10,12 +10,31 @@ import asyncio
 import logging
 
 from app.core.database import async_session
-from app.memory.consolidation import consolidate_memories
+from app.memory.consolidation import consolidate_memories, fetch_active_user_ids
 from app.memory.forgetting import apply_decay
 from app.memory.ingestion import extract_and_store_memories
 from celery_app import celery_app
 
 logger = logging.getLogger(__name__)
+
+
+def _run_async(coro_factory):
+    """Run an async coroutine factory under ``asyncio.run`` and dispose the engine.
+
+    Celery workers invoke tasks synchronously; disposing the shared async engine
+    after each run avoids asyncpg connections being bound to a closed event loop
+    on subsequent invocations.
+    """
+
+    from app.core.database import engine
+
+    async def _wrapped():
+        try:
+            return await coro_factory()
+        finally:
+            await engine.dispose()
+
+    return asyncio.run(_wrapped())
 
 
 @celery_app.task(name="extract_memories_task")
@@ -36,7 +55,7 @@ def extract_memories_task(
                 conversation_text, user_id, message_id, session
             )
 
-    asyncio.run(_run())
+    _run_async(_run)
 
 
 @celery_app.task(name="decay_memories_task")
@@ -47,15 +66,24 @@ def decay_memories_task() -> dict[str, int]:
         async with async_session() as session:
             return await apply_decay(session)
 
-    return asyncio.run(_run())
+    return _run_async(_run)
 
 
 @celery_app.task(name="consolidate_memories_task")
 def consolidate_memories_task() -> dict[str, int]:
-    """Weekly (Celery Beat, Sun 04:00 UTC) clustering + summarization."""
+    """Weekly (Celery Beat, Sat 04:00 UTC) clustering + summarization per user."""
 
     async def _run() -> dict[str, int]:
-        async with async_session() as session:
-            return await consolidate_memories(session)
+        user_ids = await fetch_active_user_ids()
+        total_summaries = 0
+        for user_id in user_ids:
+            total_summaries += await consolidate_memories(user_id)
 
-    return asyncio.run(_run())
+        logger.info(
+            "Consolidation complete: %d users, %d total summaries",
+            len(user_ids),
+            total_summaries,
+        )
+        return {"users_processed": len(user_ids), "total_summaries": total_summaries}
+
+    return _run_async(_run)

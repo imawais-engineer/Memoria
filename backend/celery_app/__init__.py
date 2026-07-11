@@ -33,10 +33,10 @@ celery_app.conf.update(
             "task": "decay_memories_task",
             "schedule": crontab(hour=3, minute=0),
         },
-        # Consolidate similar memories weekly on Sunday at 04:00 UTC.
+        # Consolidate similar memories weekly on Saturday at 04:00 UTC.
         "consolidate-memories-weekly": {
             "task": "consolidate_memories_task",
-            "schedule": crontab(hour=4, minute=0, day_of_week=0),
+            "schedule": crontab(day_of_week=6, hour=4, minute=0),
         },
     },
 )
