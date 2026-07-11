@@ -15,6 +15,7 @@ from app.api.chat import router as chat_router
 from app.api.memories import router as memories_router
 from app.config import Settings, get_settings
 from app.core.database import get_db  # noqa: F401  (exposed for later routes)
+from app.mcp.memory_skill import MEMORY_TOOL_CATALOG
 
 
 class HealthResponse(BaseModel):
@@ -55,6 +56,17 @@ def create_app() -> FastAPI:
 
         _ = settings  # configuration is loaded/validated at startup
         return HealthResponse(status="ok", service="memoria", version=__version__)
+
+    @application.get("/mcp/memory-skills", tags=["mcp"])
+    async def memory_skills() -> dict[str, list[dict[str, str]]]:
+        """Expose memory operations as MCP tools for Qwen."""
+
+        return {
+            "tools": [
+                {"name": tool["name"], "description": tool["description"]}
+                for tool in MEMORY_TOOL_CATALOG
+            ]
+        }
 
     application.include_router(chat_router)
     application.include_router(memories_router)
