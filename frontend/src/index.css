@@ -124,6 +124,46 @@ body {
 }
 .bubble.typing { color: var(--muted); font-style: italic; }
 
+.bubble-row {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-width: 76%;
+}
+.bubble-row.user-row { align-self: flex-end; }
+.bubble-row.assistant-row { align-self: flex-start; }
+.bubble-row .bubble { max-width: 100%; }
+
+.feedback-buttons {
+  display: flex;
+  gap: 6px;
+  padding-left: 4px;
+}
+.feedback-btn {
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 1;
+  padding: 4px 8px;
+  opacity: 0.85;
+  transition: all .15s ease;
+}
+.feedback-btn:hover:not(:disabled) {
+  opacity: 1;
+  border-color: var(--accent);
+}
+.feedback-btn:disabled { cursor: default; }
+.feedback-btn.selected.positive {
+  background: rgba(72, 213, 151, 0.25);
+  border-color: var(--accent-2);
+}
+.feedback-btn.selected.negative {
+  background: rgba(255, 107, 107, 0.2);
+  border-color: var(--danger);
+}
+
 .composer { display: flex; gap: 10px; margin-top: 14px; }
 .composer input {
   flex: 1;

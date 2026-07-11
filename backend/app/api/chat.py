@@ -23,6 +23,7 @@ class ChatRequest(BaseModel):
 class ChatResponse(BaseModel):
     reply: str
     session_id: str
+    memory_ids: list[str] = []
 
 
 @router.post("/chat", response_model=ChatResponse, tags=["chat"])

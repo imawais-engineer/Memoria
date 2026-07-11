@@ -47,33 +47,21 @@ def _format_memory(memory: Memory) -> str:
     return f"[{memory.type} | {created}] {memory.content}"
 
 
-async def retrieve_context(
+async def retrieve_context_and_ids(
     user_id: str,
     query_text: str,
     max_tokens: int = 6000,
     db_session: AsyncSession | None = None,
-) -> str:
-    """Return a packed context string of the user's most relevant memories.
-
-    Steps:
-    1. Embed ``query_text`` with ``text-embedding-v3``.
-    2. Select up to :data:`CANDIDATE_LIMIT` non-expired memories for ``user_id``,
-       ordered by ``cosine_similarity * importance * recency`` (recency decays
-       with each memory's ``decay_rate``; ``core`` memories never decay).
-    3. Greedily pack memories into a string until the next would exceed
-       ``max_tokens``, always placing ``core`` memories first.
-    """
+) -> tuple[str, list[str]]:
+    """Return packed context text and the IDs of memories included in it."""
 
     if db_session is None:
         raise ValueError("db_session is required")
 
     query_embedding = await get_embedding(query_text, model=DEFAULT_EMBEDDING_MODEL)
 
-    # Similarity in [0, 2] domain: cosine_distance is 1 - cosine_similarity, so
-    # similarity = 1 - distance.
     similarity = 1 - Memory.embedding.cosine_distance(query_embedding)
 
-    # Recency factor: exp(-decay_rate * age_in_days). decay_rate=0 (core) -> 1.
     age_days = cast(
         func.extract("epoch", func.now() - Memory.created_at), Float
     ) / 86400.0
@@ -95,35 +83,58 @@ async def retrieve_context(
     candidates = [row[0] for row in result.all()]
 
     if not candidates:
-        return ""
+        return "", []
 
-    # Core memories first (preserving score order), then the rest.
     core = [m for m in candidates if m.type == "core"]
     non_core = [m for m in candidates if m.type != "core"]
 
-    packed: list[str] = []
+    packed_entries: list[str] = []
+    packed_memories: list[Memory] = []
     used_tokens = 0
 
-    # Core memories are always included first, regardless of budget.
     for memory in core:
         entry = _format_memory(memory)
-        packed.append(entry)
+        packed_entries.append(entry)
+        packed_memories.append(memory)
         used_tokens += count_tokens(entry)
 
-    # Greedily add non-core memories until the next one would exceed the budget.
     for memory in non_core:
         entry = _format_memory(memory)
         entry_tokens = count_tokens(entry)
         if used_tokens + entry_tokens > max_tokens:
             break
-        packed.append(entry)
+        packed_entries.append(entry)
+        packed_memories.append(memory)
         used_tokens += entry_tokens
 
     logger.info(
         "Packed %d/%d memories (~%d tokens) for user_id=%s",
-        len(packed),
+        len(packed_memories),
         len(candidates),
         used_tokens,
         user_id,
     )
-    return "\n".join(packed)
+    return "\n".join(packed_entries), [str(memory.id) for memory in packed_memories]
+
+
+async def retrieve_context(
+    user_id: str,
+    query_text: str,
+    max_tokens: int = 6000,
+    db_session: AsyncSession | None = None,
+) -> str:
+    """Return a packed context string of the user's most relevant memories.
+
+    Steps:
+    1. Embed ``query_text`` with ``text-embedding-v3``.
+    2. Select up to :data:`CANDIDATE_LIMIT` non-expired memories for ``user_id``,
+       ordered by ``cosine_similarity * importance * recency`` (recency decays
+       with each memory's ``decay_rate``; ``core`` memories never decay).
+    3. Greedily pack memories into a string until the next would exceed
+       ``max_tokens``, always placing ``core`` memories first.
+    """
+
+    context, _ = await retrieve_context_and_ids(
+        user_id, query_text, max_tokens=max_tokens, db_session=db_session
+    )
+    return context

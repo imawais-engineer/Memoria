@@ -18,7 +18,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.dashscope_client import call_qwen_chat, get_embedding
 from app.memory.models import Memory
 from app.memory.reflection import generate_user_reflection, get_latest_reflection
-from app.memory.retrieval import retrieve_context
+from app.memory.retrieval import retrieve_context_and_ids
 
 logger = logging.getLogger(__name__)
 
@@ -152,7 +152,7 @@ async def handle_message(
             continue
 
     # 2. Retrieve long-term memory context and latest reflection.
-    memory_context = await retrieve_context(
+    memory_context, memory_ids = await retrieve_context_and_ids(
         user_id, user_message, max_tokens=6000, db_session=db_session
     )
     reflection_text = await get_latest_reflection(user_id, db_session)
@@ -225,4 +225,4 @@ async def handle_message(
     if user_msg_count % REFLECTION_EVERY_N_USER_MESSAGES == 0:
         asyncio.create_task(_run_reflection_background(user_id))
 
-    return {"reply": reply, "session_id": session_id}
+    return {"reply": reply, "session_id": session_id, "memory_ids": memory_ids}
