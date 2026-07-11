@@ -1,101 +1,174 @@
-# Memoria — Architecture
+# Memoria — System Architecture (v1.1)
 
-Memoria is a modular, async FastAPI backend that gives an LLM agent human-like
-memory: it **extracts**, **embeds**, **stores**, **retrieves**, **decays**, and
-**consolidates** memories across sessions, powered by Qwen (DashScope) and
-Alibaba Cloud data services.
+Memoria is a self-evolving personal AI with human-like memory. The upgraded
+stack (Modules 1–3) adds **MCP memory skills** for external agents, a
+**Qwen-Max consolidation engine**, and a **quantitative benchmark suite** that
+demonstrates measurable recommendation improvement when memory is present.
 
-## Chat request flow
-
-```mermaid
-sequenceDiagram
-    actor U as User
-    participant FE as React Frontend
-    participant API as FastAPI chat
-    participant AG as Agent Service
-    participant R as Redis session
-    participant PG as PostgreSQL pgvector
-    participant Q as Qwen DashScope
-    participant CW as Celery Worker
-
-    U->>FE: Type a message
-    FE->>API: POST /chat with user_id and message
-    API->>AG: handle_message
-    AG->>R: Load recent session history (last 10)
-    AG->>PG: retrieve_context vector search
-    PG-->>AG: Ranked, packed memories
-    AG->>Q: Chat completion with memory context
-    Q-->>AG: Assistant reply
-    AG->>R: Append and trim session, refresh summary
-    AG->>CW: Enqueue extract_memories_task
-    AG-->>API: reply and session_id
-    API-->>FE: JSON reply
-    FE-->>U: Render reply
-
-    Note over CW,PG: Asynchronous ingestion
-    CW->>Q: extract_memories plus embeddings
-    Q-->>CW: Structured memories and vectors
-    CW->>PG: Store Memory rows
-```
-
-## Scheduled memory maintenance (Celery Beat)
+## Architecture diagram
 
 ```mermaid
-flowchart LR
-    subgraph daily["Daily decay (03:00 UTC)"]
-        D["decay_memories_task"] --> D1["importance x exp(-decay_rate x age_days)"]
-        D1 --> D2{"importance below 0.1?"}
-        D2 -- yes --> D3["archive memory (soft delete)"]
-        D2 -- no --> D4["keep"]
+graph TD
+    %% ── Legend ──────────────────────────────────────────────────────────
+    subgraph LEGEND["Legend"]
+        direction LR
+        L_FE["Frontend layer"]:::frontend
+        L_BE["Backend layer"]:::backend
+        L_AI["AI / Qwen layer"]:::ai
+        L_ST["Storage layer"]:::storage
     end
-    subgraph weekly["Weekly consolidation (Sun 04:00 UTC)"]
-        C["consolidate_memories_task"] --> C1["cluster recent memories by cosine similarity"]
-        C1 --> C2{"cluster larger than 3?"}
-        C2 -- yes --> C3["Qwen-Max summary to new semantic memory"]
-        C3 --> C4["archive original memories"]
-        C2 -- no --> C5["leave as-is"]
+
+    %% ── Frontend ─────────────────────────────────────────────────────────
+    subgraph FE_LAYER["Frontend layer"]
+        BROWSER["User Browser<br/>React / Vite :5173"]
     end
+
+    %% ── Backend ──────────────────────────────────────────────────────────
+    subgraph BE_LAYER["Backend layer"]
+        API["FastAPI Backend<br/>:8000"]
+        MCP["MCP Endpoint<br/>GET /mcp/memory-skills"]
+        AGENT["Agent Service<br/>handle_message"]
+        RETRIEVE["retrieve_context<br/>pgvector hybrid search"]
+        MCP_TOOLS["Memory Skill Tools<br/>get_core_memories · get_user_preferences<br/>forget_memory · strengthen_memory"]
+    end
+
+    %% ── Workers ──────────────────────────────────────────────────────────
+    subgraph WORKERS["Celery Workers"]
+        BEAT["Celery Beat<br/>scheduler"]
+        W_INGEST["Ingestion Worker<br/>extract_and_store_memories"]
+        W_DECAY["Decay Worker<br/>apply_decay · daily 03:00 UTC"]
+        W_CONSOL["Consolidation Worker<br/>consolidate_memories · weekly Sat 04:00 UTC"]
+    end
+
+    %% ── Storage ──────────────────────────────────────────────────────────
+    subgraph ST_LAYER["Storage layer"]
+        REDIS["Redis<br/>session cache + Celery broker"]
+        PG["PostgreSQL 16 + pgvector<br/>memories table · Vector 1024"]
+    end
+
+    %% ── AI / Qwen ────────────────────────────────────────────────────────
+    subgraph AI_LAYER["AI / Qwen Cloud (DashScope)"]
+        QWEN_PLUS["Qwen-Plus<br/>chat · function calling"]
+        QWEN_MAX["Qwen-Max<br/>consolidation summaries"]
+        EMBED["text-embedding-v3<br/>memory + query embeddings"]
+    end
+
+    %% ── External ───────────────────────────────────────────────────────────
+    EXT["External AI Agents<br/>MCP tool callers"]
+
+    %% ── Flow 1: Chat with memory retrieval ───────────────────────────────
+    BROWSER -->|"① user message POST /chat"| API
+    API --> AGENT
+    AGENT -->|"session history"| REDIS
+    AGENT --> RETRIEVE
+    RETRIEVE -->|"similarity × importance × recency"| PG
+    RETRIEVE -->|"query embedding"| EMBED
+    AGENT -->|"context + message"| QWEN_PLUS
+    QWEN_PLUS -->|"personalized reply"| AGENT
+    AGENT --> API
+    API --> BROWSER
+
+    %% ── Flow 2: Async memory ingestion ───────────────────────────────────
+    AGENT -.->|"enqueue extract_memories_task"| W_INGEST
+    W_INGEST -->|"function calling extract_memories"| QWEN_PLUS
+    W_INGEST -->|"embed each memory"| EMBED
+    W_INGEST -->|"INSERT memories"| PG
+    REDIS --- W_INGEST
+
+    %% ── Flow 3: Daily decay ───────────────────────────────────────────────
+    BEAT -->|"③ daily trigger"| W_DECAY
+    W_DECAY -->|"apply_decay · archive low importance"| PG
+
+    %% ── Flow 4: Weekly consolidation ─────────────────────────────────────
+    BEAT -->|"④ weekly trigger"| W_CONSOL
+    W_CONSOL -->|"cluster similar memories ≥ 0.75"| PG
+    W_CONSOL -->|"summarize cluster"| QWEN_MAX
+    W_CONSOL -->|"store summary · mark is_consolidated"| PG
+
+    %% ── Flow 5: MCP interoperability ─────────────────────────────────────
+    EXT -->|"⑤ discover tools"| MCP
+    MCP --> MCP_TOOLS
+    EXT -->|"invoke memory skill"| MCP_TOOLS
+    MCP_TOOLS -->|"ownership-checked queries"| PG
+    MCP_TOOLS --> EXT
+
+    %% ── Layer colours ────────────────────────────────────────────────────
+    classDef frontend fill:#dbeafe,stroke:#1d4ed8,color:#1e3a8a
+    classDef backend fill:#ffedd5,stroke:#c2410c,color:#7c2d12
+    classDef ai fill:#f3e8ff,stroke:#7e22ce,color:#581c87
+    classDef storage fill:#dcfce7,stroke:#15803d,color:#14532d
+
+    class BROWSER,L_FE frontend
+    class API,MCP,AGENT,RETRIEVE,MCP_TOOLS,BEAT,W_INGEST,W_DECAY,W_CONSOL,L_BE backend
+    class QWEN_PLUS,QWEN_MAX,EMBED,L_AI ai
+    class REDIS,PG,L_ST storage
+    class EXT frontend
 ```
 
-## Components
+### Data flows (numbered in diagram)
 
-- **FastAPI backend** (`backend/app`) — async HTTP API. Exposes `GET /health`,
-  `POST /chat`, and `GET/DELETE /api/memories` for the dashboard.
-- **PostgreSQL + pgvector** — durable memory store. The `memories` table holds
-  content, a `Vector(1024)` embedding, `importance`, `decay_rate`, timestamps,
-  a self-referential `parent_id`, JSONB metadata, and an `archived` flag.
-- **Redis** — short-term session state (rolling last-N messages) and rolling
-  per-session summaries; also the Celery broker/result backend.
-- **Celery + Celery Beat** — background ingestion (`extract_memories_task`) and
-  scheduled maintenance (`decay_memories_task` daily, `consolidate_memories_task`
-  weekly).
-- **Qwen Cloud APIs (DashScope)** — `qwen-plus` for chat, `qwen-max` for
-  consolidation summaries, and `text-embedding-v3` (1024-dim) for embeddings.
-- **React frontend** (`frontend/`) — Vite dashboard with a Chat tab and a
-  Memory tab (inspect + manually forget memories).
+| # | Flow | Path |
+|---|------|------|
+| ① | **Chat with memory** | User message → FastAPI → `retrieve_context` (pgvector similarity) → Qwen-Plus with packed context → personalized response |
+| ② | **Memory ingestion** | Chat turn → Celery ingestion worker → Qwen-Plus function calling (`extract_memories`) → `text-embedding-v3` → store in PostgreSQL |
+| ③ | **Daily decay** | Celery Beat (03:00 UTC) → `apply_decay` → exponential importance decay → soft-delete (`archived`) low-importance memories |
+| ④ | **Weekly consolidation** | Celery Beat (Sat 04:00 UTC) → `consolidate_memories` → cluster by cosine similarity (≥ 0.75) → Qwen-Max summary → link originals via `parent_id` / `is_consolidated` |
+| ⑤ | **MCP interoperability** | External agent → `GET /mcp/memory-skills` → invoke tool (`get_core_memories`, etc.) → ownership-checked DB query → JSON result |
 
-## Memory flow
+## Why this architecture
 
-1. **Extraction** — after each turn, `extract_memories_task` sends the exchange
-   to Qwen with an `extract_memories` function/tool schema, yielding structured
-   items (`content`, `type`, `importance`, `expires_in_hours`).
-2. **Embedding** — each memory's content is embedded with `text-embedding-v3`
-   (1024 dimensions, matching the pgvector column).
-3. **Storage** — memories persist in PostgreSQL with a per-type `decay_rate`
-   (`core` 0.0, `semantic` 0.01, `episodic` 0.02, `procedural` 0.005) and an
-   optional `expires_at`.
-4. **Retrieval** — `retrieve_context` embeds the query, ranks the top candidates
-   by `cosine_similarity × importance × recency`, always includes `core`
-   memories first, and greedily packs results under a token budget (tiktoken).
-5. **Decay** — a daily job multiplies non-core importance by
-   `exp(-decay_rate × age_days)` and archives anything below `0.1`.
-6. **Consolidation** — a weekly job clusters similar recent memories (cosine
-   similarity > 0.8); clusters larger than three are summarized by Qwen-Max into
-   a single `semantic` memory, and the originals are archived.
+Memoria separates **interactive latency** from **durable memory work**. Chat
+requests stay on the FastAPI async path (sub-second retrieval + one Qwen-Plus
+call), while ingestion, decay, and consolidation run in Celery workers so heavy
+LLM and database operations never block the user. Redis holds ephemeral session
+state; PostgreSQL with pgvector is the single source of truth for long-term
+memory. This split scales horizontally: add API replicas for traffic and worker
+replicas for backlog, without coupling user-facing response time to background
+processing volume.
+
+## Key design patterns
+
+**pgvector hybrid retrieval** ranks candidates by cosine similarity multiplied
+by importance and a recency decay factor, then greedily packs context under a
+token budget—always prioritizing `core` memories first. **Celery background
+jobs** decouple write-heavy pipelines (extraction, decay, consolidation) from
+the request/response cycle and are scheduled declaratively via Celery Beat.
+**MCP memory skills** (Module 1) expose four async tools—`get_core_memories`,
+`get_user_preferences`, `forget_memory`, `strengthen_memory`—over a standard
+HTTP catalog endpoint, letting external Qwen agents interoperate without
+tight coupling to Memoria's chat API. The **benchmark suite** (Module 3) provides
+quantitative proof that memory-aware recommendations score higher on accuracy,
+safety, and coherence than memory-less baselines.
+
+## Memory lifecycle
+
+1. **Capture** — after each chat turn, the ingestion worker calls Qwen-Plus
+   function calling to extract structured memories (`core`, `episodic`,
+   `semantic`, `procedural`).
+2. **Embed** — each memory is vectorized with `text-embedding-v3` (1024 dims)
+   and stored in the `memories` table alongside importance, decay rate, and
+   metadata.
+3. **Retrieve** — at query time, `retrieve_context` embeds the user message and
+   returns the most relevant packed context for Qwen-Plus.
+4. **Consolidate** — weekly, similar recent memories are clustered and
+   summarized by Qwen-Max into a single semantic memory; originals are marked
+   `is_consolidated` and linked via `parent_id`.
+5. **Decay** — daily, non-core memories lose importance exponentially; those
+   falling below the archive threshold are soft-deleted.
+
+## Components reference
+
+| Component | Role |
+|-----------|------|
+| `frontend/` | React/Vite dashboard — Chat tab (`POST /chat`) and Memory tab (`GET/DELETE /api/memories`) |
+| `backend/app/main.py` | FastAPI entrypoint — `/health`, `/chat`, `/mcp/memory-skills` |
+| `backend/app/mcp/memory_skill.py` | MCP tool implementations for external agents |
+| `backend/app/memory/consolidation.py` | Clustering + Qwen-Max summarization engine |
+| `scripts/benchmark.py` | Quantitative with/without-memory benchmark (Module 3) |
+| `infrastructure/acs_deployment.tf` | Alibaba Cloud IaC (ECS, ApsaraDB PostgreSQL, Redis) |
 
 ## Deployment
 
-Infrastructure-as-code for Alibaba Cloud (ECS + ApsaraDB for PostgreSQL +
-ApsaraDB for Redis) lives in
+Infrastructure-as-code for Alibaba Cloud lives in
 [`infrastructure/acs_deployment.tf`](../infrastructure/acs_deployment.tf); the
 backend container image is defined by [`backend/Dockerfile`](../backend/Dockerfile).
