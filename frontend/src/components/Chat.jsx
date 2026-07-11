@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import ReactMarkdown from 'react-markdown'
 
 export default function Chat({ userId }) {
   const [messages, setMessages] = useState([])
@@ -100,7 +101,15 @@ export default function Chat({ userId }) {
             key={i}
             className={`bubble-row ${m.role === 'user' ? 'user-row' : 'assistant-row'}`}
           >
-            <div className={`bubble ${m.role}`}>{m.content}</div>
+            <div className={`bubble ${m.role}`}>
+              {m.role === 'assistant' ? (
+                <div className="markdown-content">
+                  <ReactMarkdown>{m.content}</ReactMarkdown>
+                </div>
+              ) : (
+                m.content
+              )}
+            </div>
             {m.role === 'assistant' && m.memory_ids?.length > 0 && (
               <div className="feedback-buttons">
                 <button

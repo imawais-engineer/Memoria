@@ -478,6 +478,26 @@ Show memory statistics, consolidation progress, and user insights.
 
 Strong feature highlights, architecture overview, deployment instructions.
 
+### 3.4 Chat Markdown Rendering
+
+**Objective:** Render Qwen's Markdown-formatted chat replies in the frontend.
+
+**Files to Modify:**
+- `frontend/package.json` — add `react-markdown`
+- `frontend/src/components/Chat.jsx` — wrap assistant messages in `<ReactMarkdown>`
+- `frontend/src/index.css` — style lists, code blocks, and paragraphs inside bubbles
+
+**Implementation:**
+- Install: `cd frontend && npm install react-markdown`
+- For `role === 'assistant'`, render `message.content` via `<ReactMarkdown>` inside the
+  existing bubble styling.
+- Add `.markdown-content` CSS so bold, italic, lists, and code inherit bubble colors.
+
+**How to Verify**
+- Rebuild: `cd frontend && npm run build`
+- Send: "Give me a spicy vegetarian recipe with steps"
+- Reply should show formatted **bold**, *italic*, and bullet lists—not raw `**` symbols.
+
 ---
 
 ## Final Submission Checklist
