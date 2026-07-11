@@ -179,6 +179,3 @@ Also add a short textual explanation below the diagram.
 4. Move to Level 2 once Level 1 is complete.
 
 This structured upgrade plan is designed to maximize your score across all four judging criteria.
-
-**Ready to begin?**  
-Reply with **"Start Module 1"** and I will give you any supporting code or refinements needed.
