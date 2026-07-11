@@ -11,6 +11,7 @@ responsive.
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 import os
 from http import HTTPStatus
@@ -112,6 +113,97 @@ async def call_qwen_with_functions(
         )
 
     return response
+
+
+def _parse_structured_output(response: Any) -> dict[str, Any]:
+    """Extract a JSON object from a DashScope structured-output response."""
+
+    output = getattr(response, "output", None)
+    if output is None:
+        raise RuntimeError("DashScope structured response missing output")
+
+    if isinstance(output, dict):
+        if isinstance(output.get("text"), dict):
+            return output["text"]
+        choices = output.get("choices") or []
+        if choices:
+            message = choices[0].get("message", {})
+            content = message.get("content")
+            if isinstance(content, dict):
+                return content
+            if isinstance(content, str) and content.strip():
+                return json.loads(content)
+
+    choices = getattr(output, "choices", None)
+    if choices:
+        message = choices[0].message
+        content = message.get("content") if isinstance(message, dict) else message.content
+        if isinstance(content, dict):
+            return content
+        if isinstance(content, str) and content.strip():
+            return json.loads(content)
+
+    raise RuntimeError("Unable to parse structured JSON from DashScope response")
+
+
+async def call_qwen_structured(
+    messages: list[dict[str, Any]],
+    json_schema: dict[str, Any],
+    model: str = "qwen-plus",
+) -> dict[str, Any]:
+    """Call Qwen with strict JSON schema output and return the parsed object.
+
+    Uses DashScope ``Generation.call`` with ``result_format="json"`` and the
+    provided ``json_schema``. The international base URL is applied via
+    :func:`get_dashscope_client` when configured.
+    """
+
+    client = get_dashscope_client()
+
+    def _invoke() -> Any:
+        return client.Generation.call(
+            model=model,
+            messages=messages,
+            result_format="json",
+            json_schema=json_schema,
+            response_format={
+                "type": "json_schema",
+                "json_schema": {
+                    "name": "structured_output",
+                    "schema": json_schema,
+                    "strict": True,
+                },
+            },
+        )
+
+    try:
+        response = await asyncio.to_thread(_invoke)
+    except Exception:  # noqa: BLE001 - log context then re-raise
+        logger.exception(
+            "DashScope Generation.call (structured) failed (model=%s)", model
+        )
+        raise
+
+    status_code = getattr(response, "status_code", HTTPStatus.OK)
+    if status_code != HTTPStatus.OK:
+        code = getattr(response, "code", None)
+        message = getattr(response, "message", None)
+        logger.error(
+            "DashScope structured call returned non-OK status %s (code=%s): %s",
+            status_code,
+            code,
+            message,
+        )
+        raise RuntimeError(
+            f"DashScope structured call failed with status {status_code} "
+            f"(code={code}): {message}"
+        )
+
+    try:
+        return _parse_structured_output(response)
+    except Exception as exc:
+        logger.exception("Failed to parse structured DashScope response")
+        raise RuntimeError("Failed to parse structured DashScope response") from exc
 
 
 async def call_qwen_chat(

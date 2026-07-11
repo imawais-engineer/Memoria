@@ -48,8 +48,8 @@ graph TD
 
     %% ── AI / Qwen ────────────────────────────────────────────────────────
     subgraph AI_LAYER["AI / Qwen Cloud (DashScope)"]
-        QWEN_PLUS["Qwen-Plus<br/>chat · function calling"]
-        QWEN_MAX["Qwen-Max<br/>consolidation summaries"]
+        QWEN_PLUS["Qwen-Plus<br/>chat · function calling · structured JSON"]
+        QWEN_MAX["Qwen-Max<br/>consolidation · json_schema output"]
         EMBED["text-embedding-v3<br/>memory + query embeddings"]
     end
 
@@ -136,7 +136,11 @@ the request/response cycle and are scheduled declaratively via Celery Beat.
 **MCP memory skills** (Module 1) expose four async tools—`get_core_memories`,
 `get_user_preferences`, `forget_memory`, `strengthen_memory`—over a standard
 HTTP catalog endpoint, letting external Qwen agents interoperate without
-tight coupling to Memoria's chat API. The **benchmark suite** (Module 3) provides
+tight coupling to Memoria's chat API. **Structured JSON output** via
+`call_qwen_structured()` enforces DashScope `json_schema` responses for
+consolidation (`summary` + `key_themes`), reflection (`reflection` + `traits`),
+and conflict detection (`contradiction` + `reason`), while ingestion continues
+to use function calling. The **benchmark suite** (Module 3) provides
 quantitative proof that memory-aware recommendations score higher on accuracy,
 safety, and coherence than memory-less baselines.
 
@@ -151,8 +155,9 @@ safety, and coherence than memory-less baselines.
 3. **Retrieve** — at query time, `retrieve_context` embeds the user message and
    returns the most relevant packed context for Qwen-Plus.
 4. **Consolidate** — weekly, similar recent memories are clustered and
-   summarized by Qwen-Max into a single semantic memory; originals are marked
-   `is_consolidated` and linked via `parent_id`.
+   summarized by Qwen-Max into a single semantic memory (structured JSON with
+   `summary` and `key_themes`); originals are marked `is_consolidated` and
+   linked via `parent_id`.
 5. **Decay** — daily, non-core memories lose importance exponentially; those
    falling below the archive threshold are soft-deleted.
 
@@ -163,7 +168,10 @@ safety, and coherence than memory-less baselines.
 | `frontend/` | React/Vite dashboard — Chat tab (`POST /chat`) and Memory tab (`GET/DELETE /api/memories`) |
 | `backend/app/main.py` | FastAPI entrypoint — `/health`, `/chat`, `/mcp/memory-skills` |
 | `backend/app/mcp/memory_skill.py` | MCP tool implementations for external agents |
-| `backend/app/memory/consolidation.py` | Clustering + Qwen-Max summarization engine |
+| `backend/app/memory/consolidation.py` | Clustering + Qwen-Max structured summarization (`json_schema`) |
+| `backend/app/memory/reflection.py` | Structured user reflection synthesis (`traits` in metadata) |
+| `backend/app/memory/conflict_detection.py` | pgvector similarity + structured contradiction checks |
+| `backend/app/core/dashscope_client.py` | DashScope helpers incl. `call_qwen_structured()` |
 | `scripts/benchmark.py` | Quantitative with/without-memory benchmark (Module 3) |
 | `infrastructure/acs_deployment.tf` | Alibaba Cloud IaC (ECS, ApsaraDB PostgreSQL, Redis) |
 

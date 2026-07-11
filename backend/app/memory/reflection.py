@@ -12,7 +12,7 @@ from datetime import datetime, timezone
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.dashscope_client import call_qwen_chat, get_embedding
+from app.core.dashscope_client import call_qwen_structured, get_embedding
 from app.memory.models import Memory
 
 logger = logging.getLogger(__name__)
@@ -25,8 +25,25 @@ REFLECTION_DECAY_RATE = 0.01
 REFLECTION_PROMPT = (
     "Based on these memories about the user, write 2-3 sentences that capture "
     "their key preferences, values, or recurring patterns. This reflection will "
-    "be stored and used to personalise future interactions."
+    "be stored and used to personalise future interactions. Respond in JSON format."
 )
+
+REFLECTION_JSON_SCHEMA: dict = {
+    "type": "object",
+    "properties": {
+        "reflection": {
+            "type": "string",
+            "description": "2-3 sentences capturing user preferences and patterns.",
+        },
+        "traits": {
+            "type": "array",
+            "items": {"type": "string"},
+            "description": "Short trait labels for the user.",
+        },
+    },
+    "required": ["reflection", "traits"],
+    "additionalProperties": False,
+}
 
 
 async def generate_user_reflection(user_id: str, db_session: AsyncSession) -> str:
@@ -61,10 +78,21 @@ async def generate_user_reflection(user_id: str, db_session: AsyncSession) -> st
             {"role": "system", "content": REFLECTION_PROMPT},
             {
                 "role": "user",
-                "content": f"Memories about the user:\n{memory_lines}",
+                "content": f"Memories about the user (return JSON):\n{memory_lines}",
             },
         ]
-        reflection_text = (await call_qwen_chat(messages, model=REFLECTION_MODEL)).strip()
+        result = await call_qwen_structured(
+            messages, REFLECTION_JSON_SCHEMA, model=REFLECTION_MODEL
+        )
+        if not isinstance(result.get("reflection"), str) or not isinstance(
+            result.get("traits"), list
+        ):
+            logger.warning(
+                "Reflection structured output missing required fields: %s", result
+            )
+            return ""
+        reflection_text = result["reflection"].strip()
+        traits = [str(trait) for trait in result["traits"]]
         if not reflection_text:
             return ""
 
@@ -80,7 +108,7 @@ async def generate_user_reflection(user_id: str, db_session: AsyncSession) -> st
                 created_at=now,
                 last_accessed=now,
                 decay_rate=REFLECTION_DECAY_RATE,
-                meta_data={"source": "reflection"},
+                meta_data={"source": "reflection", "traits": traits},
             )
         )
         await db_session.commit()

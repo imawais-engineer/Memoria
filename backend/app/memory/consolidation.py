@@ -14,13 +14,14 @@ from datetime import datetime, timedelta, timezone
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.dashscope_client import call_qwen_chat, get_embedding
+from app.core.dashscope_client import call_qwen_structured, get_embedding
 from app.core.database import async_session
 from app.memory.models import Memory
 
 logger = logging.getLogger(__name__)
 
 CONSOLIDATION_MODEL = "qwen-max"
+STRUCTURED_FALLBACK_MODEL = "qwen-plus"
 SIMILARITY_THRESHOLD = 0.75
 MIN_CLUSTER_SIZE = 3
 LOOKBACK_DAYS = 7
@@ -29,8 +30,26 @@ SUMMARY_DECAY_RATE = 0.01
 
 CONSOLIDATION_SYSTEM_PROMPT = (
     "You are a master memory consolidator. Synthesize these related memories "
-    "into ONE concise semantic memory (< 50 words) that captures the essence."
+    "into ONE concise semantic memory (< 50 words) that captures the essence. "
+    "Respond in JSON format."
 )
+
+CONSOLIDATION_JSON_SCHEMA: dict = {
+    "type": "object",
+    "properties": {
+        "summary": {
+            "type": "string",
+            "description": "One concise semantic memory under 50 words.",
+        },
+        "key_themes": {
+            "type": "array",
+            "items": {"type": "string"},
+            "description": "Short theme labels extracted from the cluster.",
+        },
+    },
+    "required": ["summary", "key_themes"],
+    "additionalProperties": False,
+}
 
 
 def _cosine_similarity(a: list[float], b: list[float]) -> float:
@@ -70,20 +89,37 @@ def _cluster_memories(memories: list[Memory]) -> list[list[Memory]]:
     return clusters
 
 
-async def _summarize_cluster(cluster: list[Memory]) -> str | None:
-    """Ask Qwen-Max to synthesize a cluster into one concise semantic memory."""
+async def _summarize_cluster(cluster: list[Memory]) -> tuple[str, list[str]] | None:
+    """Ask Qwen-Max to synthesize a cluster into structured summary JSON."""
 
     bullet_points = "\n".join(f"- {memory.content}" for memory in cluster)
     messages = [
         {"role": "system", "content": CONSOLIDATION_SYSTEM_PROMPT},
         {
             "role": "user",
-            "content": f"Synthesize these memories:\n{bullet_points}",
+            "content": f"Synthesize these memories as JSON:\n{bullet_points}",
         },
     ]
     try:
-        summary = (await call_qwen_chat(messages, model=CONSOLIDATION_MODEL)).strip()
-        return summary or None
+        for model in (CONSOLIDATION_MODEL, STRUCTURED_FALLBACK_MODEL):
+            result = await call_qwen_structured(
+                messages,
+                CONSOLIDATION_JSON_SCHEMA,
+                model=model,
+            )
+            if isinstance(result.get("summary"), str) and isinstance(
+                result.get("key_themes"), list
+            ):
+                summary = result["summary"].strip()
+                key_themes = [str(theme) for theme in result["key_themes"]]
+                if summary:
+                    return summary, key_themes
+            logger.warning(
+                "Consolidation structured output missing required fields from %s: %s",
+                model,
+                result,
+            )
+        return None
     except Exception:
         logger.warning(
             "Qwen consolidation call failed for cluster of %d memories; skipping",
@@ -130,9 +166,11 @@ async def consolidate_memories(user_id: str) -> int:
             if len(cluster) < MIN_CLUSTER_SIZE:
                 continue
 
-            summary_text = await _summarize_cluster(cluster)
-            if not summary_text:
+            summary_result = await _summarize_cluster(cluster)
+            if not summary_result:
                 continue
+
+            summary_text, key_themes = summary_result
 
             try:
                 embedding = await get_embedding(summary_text)
@@ -152,6 +190,7 @@ async def consolidate_memories(user_id: str) -> int:
                 decay_rate=SUMMARY_DECAY_RATE,
                 meta_data={
                     "source": "consolidation",
+                    "key_themes": key_themes,
                     "consolidated_from": [str(memory.id) for memory in cluster],
                 },
             )

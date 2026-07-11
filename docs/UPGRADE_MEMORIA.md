@@ -434,6 +434,36 @@ After completing Level 1, these modules add sophistication:
 
 ---
 
+### 2.4 Structured Output (DashScope JSON Schema)
+
+**Objective:** Enforce strict JSON from Qwen across consolidation, reflection, and conflict detection.
+
+**Impact:** +2–3 points (Technical Depth; Reliability)
+
+**Files to Create/Modify:**
+- Modify: `backend/app/core/dashscope_client.py` — add `call_qwen_structured()`
+- Modify: `backend/app/memory/consolidation.py` — structured summary + `key_themes`
+- Modify: `backend/app/memory/reflection.py` — structured reflection + `traits`
+- Modify: `backend/app/memory/conflict_detection.py` — structured `contradiction` boolean
+- Do **not** change `ingestion.py` (function calling is already structured)
+
+**Implementation:**
+- `call_qwen_structured(messages, json_schema, model="qwen-plus")` uses DashScope
+  `result_format="json"` with `json_schema` and the international base URL.
+- **Consolidation schema:** `{summary: string, key_themes: string[]}` — store summary
+  as content, themes in metadata.
+- **Reflection schema:** `{reflection: string, traits: string[]}` — store reflection
+  as content, traits in metadata.
+- **Conflict schema:** `{contradiction: boolean, reason: string}` — use boolean
+  for conflict decisions.
+
+**How to Verify**
+- Run consolidation on a user with 3+ similar memories; check metadata has `key_themes`.
+- Trigger reflection (10th session message); check metadata has `traits`.
+- Insert contradictory facts; confirm conflict detection logs structured `reason`.
+
+---
+
 ## LEVEL 3: Final Polish
 
 ### 3.1 Enhanced Dashboard & Visualizations

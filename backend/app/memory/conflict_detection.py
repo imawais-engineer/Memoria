@@ -12,7 +12,7 @@ import uuid
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.dashscope_client import call_qwen_chat, get_embedding
+from app.core.dashscope_client import call_qwen_structured, get_embedding
 from app.memory.models import Memory
 
 logger = logging.getLogger(__name__)
@@ -26,8 +26,24 @@ CONTRADICTION_SYSTEM_PROMPT = (
     "statements about the same user are factually contradictory—they cannot both "
     "be true at the same time. Examples of contradictions: 'allergic to peanuts' "
     "vs 'loves peanut butter', 'vegetarian' vs 'eats steak every week'. "
-    "Reply with only YES or NO."
+    "Respond in JSON format."
 )
+
+CONTRADICTION_JSON_SCHEMA: dict = {
+    "type": "object",
+    "properties": {
+        "contradiction": {
+            "type": "boolean",
+            "description": "True when the statements cannot both be true.",
+        },
+        "reason": {
+            "type": "string",
+            "description": "Brief explanation of the judgment.",
+        },
+    },
+    "required": ["contradiction", "reason"],
+    "additionalProperties": False,
+}
 
 
 async def _is_contradiction(existing_content: str, new_content: str) -> bool:
@@ -40,13 +56,26 @@ async def _is_contradiction(existing_content: str, new_content: str) -> bool:
             "content": (
                 f"Statement A: {existing_content}\n"
                 f"Statement B: {new_content}\n\n"
-                "Do these contradict each other?"
+                "Return JSON indicating whether these contradict."
             ),
         },
     ]
     try:
-        response = (await call_qwen_chat(messages, model=CONTRADICTION_MODEL)).strip()
-        return response.upper().startswith("YES")
+        result = await call_qwen_structured(
+            messages, CONTRADICTION_JSON_SCHEMA, model=CONTRADICTION_MODEL
+        )
+        if not isinstance(result.get("contradiction"), bool) or not isinstance(
+            result.get("reason"), str
+        ):
+            logger.warning(
+                "Contradiction structured output missing required fields: %s",
+                result,
+            )
+            return False
+        contradiction = result["contradiction"]
+        if contradiction:
+            logger.info("Structured contradiction check: %s", result["reason"])
+        return contradiction
     except Exception:
         logger.warning(
             "Contradiction check failed; treating as non-conflicting",
