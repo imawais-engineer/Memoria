@@ -7,6 +7,7 @@ ingestion (Celery).
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import uuid
@@ -16,6 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.dashscope_client import call_qwen_chat, get_embedding
 from app.memory.models import Memory
+from app.memory.reflection import generate_user_reflection, get_latest_reflection
 from app.memory.retrieval import retrieve_context
 
 logger = logging.getLogger(__name__)
@@ -31,6 +33,9 @@ SESSION_TTL_SECONDS = 7 * 24 * 60 * 60
 
 # Regenerate the rolling session summary every N turns (or on explicit recap).
 SUMMARY_EVERY_N_TURNS = 5
+
+# Trigger reflective memory synthesis every N user messages in a session.
+REFLECTION_EVERY_N_USER_MESSAGES = 10
 
 # Importance/decay for a persisted session-summary memory.
 SESSION_SUMMARY_IMPORTANCE = 0.7
@@ -101,6 +106,24 @@ async def _store_summary_memory(
     await db_session.commit()
 
 
+async def _run_reflection_background(user_id: str) -> None:
+    """Generate a user reflection without blocking the chat response."""
+
+    from app.core.database import async_session
+
+    try:
+        async with async_session() as session:
+            reflection = await generate_user_reflection(user_id, session)
+            if reflection:
+                logger.info(
+                    "Background reflection stored for user_id=%s: %s",
+                    user_id,
+                    reflection[:120],
+                )
+    except Exception:  # noqa: BLE001 - reflection is best-effort
+        logger.exception("Background reflection failed for user_id=%s", user_id)
+
+
 async def handle_message(
     user_id: str,
     user_message: str,
@@ -128,15 +151,20 @@ async def handle_message(
         except (json.JSONDecodeError, TypeError):
             continue
 
-    # 2. Retrieve long-term memory context.
+    # 2. Retrieve long-term memory context and latest reflection.
     memory_context = await retrieve_context(
         user_id, user_message, max_tokens=6000, db_session=db_session
     )
+    reflection_text = await get_latest_reflection(user_id, db_session)
 
     # 3-4. Build the message list: system prompt + history + current message.
     # Prepend the rolling session summary (if any) so context survives trimming.
     session_summary = await redis_client.get(f"{session_key}:summary")
     system_prompt = SYSTEM_PROMPT_TEMPLATE.format(memory_context=memory_context)
+    if reflection_text:
+        system_prompt += (
+            f"\n\nLatest reflection about the user: {reflection_text}"
+        )
     if session_summary:
         system_prompt = (
             f"Summary of the conversation so far: {session_summary}\n\n"
@@ -190,5 +218,11 @@ async def handle_message(
         )
     except Exception:  # noqa: BLE001 - enqueue failure must not break the reply
         logger.exception("Failed to enqueue extract_memories_task")
+
+    # 8. Every 10th user message, fire-and-forget reflective memory synthesis.
+    user_msg_count = await redis_client.incr(f"{session_key}:user_msg_count")
+    await redis_client.expire(f"{session_key}:user_msg_count", SESSION_TTL_SECONDS)
+    if user_msg_count % REFLECTION_EVERY_N_USER_MESSAGES == 0:
+        asyncio.create_task(_run_reflection_background(user_id))
 
     return {"reply": reply, "session_id": session_id}
