@@ -24,7 +24,7 @@ from app.memory.models import Memory
 logger = logging.getLogger(__name__)
 
 # Model used for memory extraction (per roadmap Module 3).
-QWEN_MODEL = "qwen3-plus"
+QWEN_MODEL = "qwen-plus"
 
 # Embedding model used to vectorize each extracted memory.
 EMBEDDING_MODEL = DEFAULT_EMBEDDING_MODEL
