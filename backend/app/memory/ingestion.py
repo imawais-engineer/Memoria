@@ -139,12 +139,17 @@ async def extract_and_store_memories(
     message_id: str,
     db_session: AsyncSession,
     session_id: str | None = None,
+    is_memoryless: bool = False,
 ) -> list[Memory]:
     """Extract memories from a conversation turn and persist them.
 
     Returns the list of created :class:`Memory` rows (empty if none were
     extracted). Rolls back and re-raises on database errors.
     """
+
+    if is_memoryless:
+        logger.info("Skipping memory extraction for memoryless session")
+        return []
 
     messages = [
         {"role": "system", "content": SYSTEM_PROMPT},

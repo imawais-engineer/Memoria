@@ -8,6 +8,7 @@ string under a token budget. ``core`` memories are always included first.
 from __future__ import annotations
 
 import logging
+import uuid
 
 from sqlalchemy import Float, cast, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -52,11 +53,18 @@ async def retrieve_context_and_ids(
     query_text: str,
     max_tokens: int = 6000,
     db_session: AsyncSession | None = None,
+    *,
+    session_id: str | None = None,
+    is_memoryless: bool = False,
+    global_memory_enabled: bool = True,
 ) -> tuple[str, list[str]]:
     """Return packed context text and the IDs of memories included in it."""
 
     if db_session is None:
         raise ValueError("db_session is required")
+
+    if is_memoryless:
+        return "", []
 
     query_embedding = await get_embedding(query_text, model=DEFAULT_EMBEDDING_MODEL)
 
@@ -69,12 +77,26 @@ async def retrieve_context_and_ids(
 
     score = (similarity * Memory.importance * recency).label("score")
 
+    filters = [
+        Memory.user_id == user_id,
+        Memory.archived.is_(False),
+        Memory.superseded.is_(False),
+        or_(Memory.expires_at.is_(None), Memory.expires_at > func.now()),
+    ]
+
+    if not global_memory_enabled:
+        scope_filters = [Memory.type == "core"]
+        if session_id:
+            try:
+                session_uuid = uuid.UUID(session_id)
+                scope_filters.append(Memory.session_id == session_uuid)
+            except ValueError:
+                pass
+        filters.append(or_(*scope_filters))
+
     stmt = (
         select(Memory, score)
-        .where(Memory.user_id == user_id)
-        .where(Memory.archived.is_(False))
-        .where(Memory.superseded.is_(False))
-        .where(or_(Memory.expires_at.is_(None), Memory.expires_at > func.now()))
+        .where(*filters)
         .order_by(score.desc())
         .limit(CANDIDATE_LIMIT)
     )
@@ -122,6 +144,10 @@ async def retrieve_context(
     query_text: str,
     max_tokens: int = 6000,
     db_session: AsyncSession | None = None,
+    *,
+    session_id: str | None = None,
+    is_memoryless: bool = False,
+    global_memory_enabled: bool = True,
 ) -> str:
     """Return a packed context string of the user's most relevant memories.
 
@@ -135,6 +161,12 @@ async def retrieve_context(
     """
 
     context, _ = await retrieve_context_and_ids(
-        user_id, query_text, max_tokens=max_tokens, db_session=db_session
+        user_id,
+        query_text,
+        max_tokens=max_tokens,
+        db_session=db_session,
+        session_id=session_id,
+        is_memoryless=is_memoryless,
+        global_memory_enabled=global_memory_enabled,
     )
     return context

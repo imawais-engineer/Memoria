@@ -17,7 +17,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.dashscope_client import call_qwen_chat, get_embedding
 from app.memory.models import Memory
-from app.models.chat_session import ChatSession  # noqa: F401  (register FK table)
+from app.models.chat_session import ChatSession
+from app.models.user import User
 from app.api.sessions import touch_session_on_message
 from app.memory.reflection import generate_user_reflection, get_latest_reflection
 from app.memory.retrieval import retrieve_context_and_ids
@@ -59,6 +60,36 @@ def _wants_recap(message: str) -> bool:
 
     lowered = message.lower()
     return any(keyword in lowered for keyword in RECAP_KEYWORDS)
+
+
+async def _get_session_flags(
+    session_id: str, db_session: AsyncSession
+) -> tuple[bool, bool]:
+    """Return ``(is_memoryless, session_exists)`` for a chat session."""
+
+    try:
+        session_uuid = uuid.UUID(session_id)
+    except ValueError:
+        return False, False
+
+    session = await db_session.get(ChatSession, session_uuid)
+    if session is None:
+        return False, False
+    return session.is_memoryless, True
+
+
+async def _get_global_memory_enabled(user_id: str, db_session: AsyncSession) -> bool:
+    """Return whether cross-chat memory access is enabled for a registered user."""
+
+    try:
+        user_uuid = uuid.UUID(user_id)
+    except ValueError:
+        return True
+
+    user = await db_session.get(User, user_uuid)
+    if user is None:
+        return True
+    return user.global_memory_enabled
 
 
 async def _generate_session_summary(
@@ -148,6 +179,9 @@ async def handle_message(
 
     await touch_session_on_message(session_id, user_message, db_session)
 
+    is_memoryless, _ = await _get_session_flags(session_id, db_session)
+    global_memory_enabled = await _get_global_memory_enabled(user_id, db_session)
+
     session_key = f"session:{session_id}"
 
     # 1. Load recent session history (list of {role, content}).
@@ -161,9 +195,19 @@ async def handle_message(
 
     # 2. Retrieve long-term memory context and latest reflection.
     memory_context, memory_ids = await retrieve_context_and_ids(
-        user_id, user_message, max_tokens=6000, db_session=db_session
+        user_id,
+        user_message,
+        max_tokens=6000,
+        db_session=db_session,
+        session_id=session_id,
+        is_memoryless=is_memoryless,
+        global_memory_enabled=global_memory_enabled,
     )
-    reflection_text = await get_latest_reflection(user_id, db_session)
+    reflection_text = (
+        None
+        if is_memoryless
+        else await get_latest_reflection(user_id, db_session)
+    )
 
     # 3-4. Build the message list: system prompt + history + current message.
     # Prepend the rolling session summary (if any) so context survives trimming.
@@ -200,7 +244,9 @@ async def handle_message(
     # Redis and persist it as an episodic memory for cross-session continuity.
     turns = await redis_client.incr(f"{session_key}:turns")
     await redis_client.expire(f"{session_key}:turns", SESSION_TTL_SECONDS)
-    if _wants_recap(user_message) or turns % SUMMARY_EVERY_N_TURNS == 0:
+    if not is_memoryless and (
+        _wants_recap(user_message) or turns % SUMMARY_EVERY_N_TURNS == 0
+    ):
         try:
             raw_latest = await redis_client.lrange(
                 session_key, -SESSION_MAX_MESSAGES, -1
@@ -214,24 +260,26 @@ async def handle_message(
             logger.exception("Session summary generation failed")
 
     # 7. Fire-and-forget background memory extraction from this exchange.
-    message_id = str(uuid.uuid4())
-    conversation_text = f"User: {user_message}\nAssistant: {reply}"
-    try:
-        from celery_app.tasks import extract_memories_task
+    if not is_memoryless:
+        message_id = str(uuid.uuid4())
+        conversation_text = f"User: {user_message}\nAssistant: {reply}"
+        try:
+            from celery_app.tasks import extract_memories_task
 
-        extract_memories_task.delay(
-            conversation_text=conversation_text,
-            user_id=user_id,
-            message_id=message_id,
-            session_id=session_id,
-        )
-    except Exception:  # noqa: BLE001 - enqueue failure must not break the reply
-        logger.exception("Failed to enqueue extract_memories_task")
+            extract_memories_task.delay(
+                conversation_text=conversation_text,
+                user_id=user_id,
+                message_id=message_id,
+                session_id=session_id,
+                is_memoryless=is_memoryless,
+            )
+        except Exception:  # noqa: BLE001 - enqueue failure must not break the reply
+            logger.exception("Failed to enqueue extract_memories_task")
 
     # 8. Every 10th user message, fire-and-forget reflective memory synthesis.
     user_msg_count = await redis_client.incr(f"{session_key}:user_msg_count")
     await redis_client.expire(f"{session_key}:user_msg_count", SESSION_TTL_SECONDS)
-    if user_msg_count % REFLECTION_EVERY_N_USER_MESSAGES == 0:
+    if not is_memoryless and user_msg_count % REFLECTION_EVERY_N_USER_MESSAGES == 0:
         asyncio.create_task(_run_reflection_background(user_id))
 
     return {"reply": reply, "session_id": session_id, "memory_ids": memory_ids}

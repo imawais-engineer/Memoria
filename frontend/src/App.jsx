@@ -38,13 +38,18 @@ export default function App() {
   const [activeSessionId, setActiveSessionId] = useState(null)
   const [sessionsLoading, setSessionsLoading] = useState(false)
   const [sessionsError, setSessionsError] = useState('')
+  const [globalMemoryEnabled, setGlobalMemoryEnabled] = useState(true)
+  const [prefsSaving, setPrefsSaving] = useState(false)
 
   const isLoggedIn = Boolean(auth?.user_id)
   const userId = isLoggedIn ? auth.user_id : legacyUserId
+  const activeSession = sessions.find((session) => session.session_id === activeSessionId)
+  const isMemoryless = Boolean(activeSession?.is_memoryless)
 
   const handleAuth = useCallback((user) => {
     localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(user))
     setAuth(user)
+    setGlobalMemoryEnabled(user.global_memory_enabled ?? true)
     setGuestMode(false)
   }, [])
 
@@ -55,7 +60,37 @@ export default function App() {
     setLegacyUserId(randomUserId())
     setSessions([])
     setActiveSessionId(null)
+    setGlobalMemoryEnabled(true)
   }, [])
+
+  const fetchPreferences = useCallback(async () => {
+    if (!isLoggedIn) return
+    try {
+      const res = await fetch(
+        `/auth/preferences?user_id=${encodeURIComponent(auth.user_id)}`,
+      )
+      if (!res.ok) return
+      const data = await res.json()
+      setGlobalMemoryEnabled(data.global_memory_enabled)
+      setAuth((current) => {
+        const next = {
+          ...current,
+          global_memory_enabled: data.global_memory_enabled,
+        }
+        localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(next))
+        return next
+      })
+    } catch {
+      // preferences are optional on load failure
+    }
+  }, [isLoggedIn, auth?.user_id])
+
+  useEffect(() => {
+    if (isLoggedIn) {
+      setGlobalMemoryEnabled(auth.global_memory_enabled ?? true)
+      fetchPreferences()
+    }
+  }, [isLoggedIn, auth?.user_id, auth?.global_memory_enabled, fetchPreferences])
 
   const loadSessions = useCallback(async () => {
     setSessionsLoading(true)
@@ -74,19 +109,56 @@ export default function App() {
     }
   }, [userId])
 
-  const createSession = useCallback(async () => {
-    const res = await fetch('/sessions', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ user_id: userId }),
-    })
-    if (!res.ok) throw new Error(`Failed to create session (${res.status})`)
-    const session = await res.json()
-    setSessions((current) => [session, ...current.filter((s) => s.session_id !== session.session_id)])
-    setActiveSessionId(session.session_id)
-    localStorage.setItem(sessionStorageKey(userId), session.session_id)
-    return session
-  }, [userId])
+  const deleteSessionById = useCallback(
+    async (sessionId, { quiet = false } = {}) => {
+      const res = await fetch(
+        `/sessions/${encodeURIComponent(sessionId)}?user_id=${encodeURIComponent(userId)}`,
+        { method: 'DELETE' },
+      )
+      if (!res.ok) {
+        if (!quiet) throw new Error(`Failed to delete session (${res.status})`)
+        return false
+      }
+      setSessions((current) =>
+        current.filter((session) => session.session_id !== sessionId),
+      )
+      return true
+    },
+    [userId],
+  )
+
+  const cleanupMemorylessSessions = useCallback(
+    async (sessionList) => {
+      const stale = sessionList.filter((session) => session.is_memoryless)
+      await Promise.all(
+        stale.map((session) => deleteSessionById(session.session_id, { quiet: true })),
+      )
+      return sessionList.filter((session) => !session.is_memoryless)
+    },
+    [deleteSessionById],
+  )
+
+  const createSession = useCallback(
+    async (isMemoryless = false) => {
+      const res = await fetch('/sessions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ user_id: userId, is_memoryless: isMemoryless }),
+      })
+      if (!res.ok) throw new Error(`Failed to create session (${res.status})`)
+      const session = await res.json()
+      setSessions((current) => [
+        session,
+        ...current.filter((item) => item.session_id !== session.session_id),
+      ])
+      setActiveSessionId(session.session_id)
+      if (!isMemoryless) {
+        localStorage.setItem(sessionStorageKey(userId), session.session_id)
+      }
+      return session
+    },
+    [userId],
+  )
 
   useEffect(() => {
     if (!isLoggedIn && !guestMode) return
@@ -97,9 +169,13 @@ export default function App() {
       const existing = await loadSessions()
       if (cancelled) return
 
+      const cleaned = await cleanupMemorylessSessions(existing)
+      if (cancelled) return
+      setSessions(cleaned)
+
       const savedId = localStorage.getItem(sessionStorageKey(userId))
       const savedSession = savedId
-        ? existing.find((session) => session.session_id === savedId)
+        ? cleaned.find((session) => session.session_id === savedId)
         : null
 
       if (savedSession) {
@@ -107,14 +183,14 @@ export default function App() {
         return
       }
 
-      if (existing.length > 0) {
-        setActiveSessionId(existing[0].session_id)
-        localStorage.setItem(sessionStorageKey(userId), existing[0].session_id)
+      if (cleaned.length > 0) {
+        setActiveSessionId(cleaned[0].session_id)
+        localStorage.setItem(sessionStorageKey(userId), cleaned[0].session_id)
         return
       }
 
       try {
-        await createSession()
+        await createSession(false)
       } catch (e) {
         if (!cancelled) setSessionsError(e.message || 'Failed to create chat session')
       }
@@ -124,56 +200,122 @@ export default function App() {
     return () => {
       cancelled = true
     }
-  }, [userId, isLoggedIn, guestMode, loadSessions, createSession])
+  }, [userId, isLoggedIn, guestMode, loadSessions, createSession, cleanupMemorylessSessions])
 
   const handleSelectSession = useCallback(
-    (sessionId) => {
+    async (sessionId) => {
+      if (
+        activeSession?.is_memoryless &&
+        activeSessionId &&
+        sessionId !== activeSessionId
+      ) {
+        await deleteSessionById(activeSessionId, { quiet: true })
+      }
+
+      const target = sessions.find((session) => session.session_id === sessionId)
       setActiveSessionId(sessionId)
-      localStorage.setItem(sessionStorageKey(userId), sessionId)
+      if (!target?.is_memoryless) {
+        localStorage.setItem(sessionStorageKey(userId), sessionId)
+      } else {
+        localStorage.removeItem(sessionStorageKey(userId))
+      }
       setTab('chat')
     },
-    [userId],
+    [activeSession, activeSessionId, deleteSessionById, sessions, userId],
   )
 
-  const handleNewChat = useCallback(async () => {
-    try {
-      await createSession()
-      setTab('chat')
-    } catch (e) {
-      setSessionsError(e.message || 'Failed to create chat session')
-    }
-  }, [createSession])
+  const handleNewChat = useCallback(
+    async (isMemoryless = false) => {
+      try {
+        if (
+          activeSession?.is_memoryless &&
+          activeSessionId
+        ) {
+          await deleteSessionById(activeSessionId, { quiet: true })
+        }
+        await createSession(isMemoryless)
+        setTab('chat')
+      } catch (e) {
+        setSessionsError(e.message || 'Failed to create chat session')
+      }
+    },
+    [activeSession, activeSessionId, createSession, deleteSessionById],
+  )
 
   const handleDeleteSession = useCallback(
     async (sessionId) => {
       setSessionsError('')
       try {
-        const res = await fetch(
-          `/sessions/${encodeURIComponent(sessionId)}?user_id=${encodeURIComponent(userId)}`,
-          { method: 'DELETE' },
-        )
-        if (!res.ok) throw new Error(`Failed to delete session (${res.status})`)
-
-        const remaining = sessions.filter((session) => session.session_id !== sessionId)
-        setSessions(remaining)
+        await deleteSessionById(sessionId)
 
         if (activeSessionId === sessionId) {
+          const remaining = sessions.filter((session) => session.session_id !== sessionId)
           if (remaining.length > 0) {
-            handleSelectSession(remaining[0].session_id)
+            await handleSelectSession(remaining[0].session_id)
           } else {
-            await createSession()
+            await createSession(false)
           }
         }
       } catch (e) {
         setSessionsError(e.message || 'Failed to delete chat session')
       }
     },
-    [userId, sessions, activeSessionId, handleSelectSession, createSession],
+    [
+      activeSessionId,
+      createSession,
+      deleteSessionById,
+      handleSelectSession,
+      sessions,
+    ],
   )
 
   const handleSessionUpdated = useCallback(async () => {
     await loadSessions()
   }, [loadSessions])
+
+  const handleGlobalMemoryToggle = useCallback(async () => {
+    if (!isLoggedIn || prefsSaving) return
+    const nextValue = !globalMemoryEnabled
+    setPrefsSaving(true)
+    setSessionsError('')
+    try {
+      const res = await fetch('/auth/preferences', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          user_id: auth.user_id,
+          global_memory_enabled: nextValue,
+        }),
+      })
+      if (!res.ok) throw new Error(`Failed to update preference (${res.status})`)
+      const data = await res.json()
+      setGlobalMemoryEnabled(data.global_memory_enabled)
+      setAuth((current) => {
+        const updated = {
+          ...current,
+          global_memory_enabled: data.global_memory_enabled,
+        }
+        localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(updated))
+        return updated
+      })
+    } catch (e) {
+      setSessionsError(e.message || 'Failed to update Personal Intelligence setting')
+    } finally {
+      setPrefsSaving(false)
+    }
+  }, [auth?.user_id, globalMemoryEnabled, isLoggedIn, prefsSaving])
+
+  useEffect(() => {
+    if (!activeSession?.is_memoryless || !activeSessionId) return undefined
+
+    function cleanupOnUnload() {
+      const url = `/sessions/${encodeURIComponent(activeSessionId)}?user_id=${encodeURIComponent(userId)}`
+      fetch(url, { method: 'DELETE', keepalive: true }).catch(() => {})
+    }
+
+    window.addEventListener('beforeunload', cleanupOnUnload)
+    return () => window.removeEventListener('beforeunload', cleanupOnUnload)
+  }, [activeSession?.is_memoryless, activeSessionId, userId])
 
   if (!isLoggedIn && !guestMode) {
     return <Auth onAuth={handleAuth} onGuest={() => setGuestMode(true)} />
@@ -190,6 +332,15 @@ export default function App() {
           </div>
           {isLoggedIn ? (
             <div className="header-actions">
+              <label className="pref-toggle" title="Access memories across all chats">
+                <input
+                  type="checkbox"
+                  checked={globalMemoryEnabled}
+                  onChange={handleGlobalMemoryToggle}
+                  disabled={prefsSaving}
+                />
+                <span>Personal Intelligence</span>
+              </label>
               <span className="user-greeting">@{auth.username}</span>
               <button type="button" className="logout-btn" onClick={handleLogout}>
                 Logout
@@ -240,6 +391,7 @@ export default function App() {
               <Chat
                 userId={userId}
                 sessionId={activeSessionId}
+                isMemoryless={isMemoryless}
                 onSessionUpdated={handleSessionUpdated}
               />
             ) : (

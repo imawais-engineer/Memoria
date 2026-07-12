@@ -54,7 +54,11 @@ export default function Auth({ onAuth, onGuest }) {
       }
 
       const data = await res.json()
-      onAuth({ user_id: data.user_id, username: data.username })
+      onAuth({
+        user_id: data.user_id,
+        username: data.username,
+        global_memory_enabled: data.global_memory_enabled ?? true,
+      })
     } catch {
       setError('Could not reach the server. Is the backend running?')
     } finally {

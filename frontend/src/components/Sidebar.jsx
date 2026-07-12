@@ -9,6 +9,8 @@ export default function Sidebar({
   onDelete,
 }) {
   const [pendingDelete, setPendingDelete] = useState(null)
+  const [memorylessChecked, setMemorylessChecked] = useState(false)
+  const [pendingMemoryless, setPendingMemoryless] = useState(false)
 
   function confirmDelete() {
     if (pendingDelete) {
@@ -17,11 +19,36 @@ export default function Sidebar({
     }
   }
 
+  function handleNewChatClick() {
+    if (memorylessChecked) {
+      setPendingMemoryless(true)
+      return
+    }
+    onNewChat(false)
+  }
+
+  function confirmMemoryless() {
+    setPendingMemoryless(false)
+    setMemorylessChecked(false)
+    onNewChat(true)
+  }
+
   return (
     <aside className="sidebar">
-      <button type="button" className="btn sidebar-new" onClick={onNewChat}>
-        + New Chat
-      </button>
+      <div className="sidebar-new-row">
+        <button type="button" className="btn sidebar-new" onClick={handleNewChatClick}>
+          + New Chat
+        </button>
+      </div>
+
+      <label className="memoryless-toggle">
+        <input
+          type="checkbox"
+          checked={memorylessChecked}
+          onChange={(e) => setMemorylessChecked(e.target.checked)}
+        />
+        <span>MemoryLess Mode</span>
+      </label>
 
       <div className="sidebar-list">
         {loading && <div className="sidebar-empty">Loading chats…</div>}
@@ -32,7 +59,7 @@ export default function Sidebar({
           sessions.map((session) => (
             <div
               key={session.session_id}
-              className={`sidebar-item ${session.session_id === activeSessionId ? 'active' : ''}`}
+              className={`sidebar-item ${session.session_id === activeSessionId ? 'active' : ''} ${session.is_memoryless ? 'memoryless' : ''}`}
             >
               <button
                 type="button"
@@ -40,7 +67,12 @@ export default function Sidebar({
                 onClick={() => onSelect(session.session_id)}
                 title={session.title}
               >
-                {session.title}
+                {session.is_memoryless && (
+                  <span className="sidebar-icon" aria-hidden="true">
+                    🕶️
+                  </span>
+                )}
+                <span className="sidebar-item-title">{session.title}</span>
               </button>
               <button
                 type="button"
@@ -72,6 +104,30 @@ export default function Sidebar({
               </button>
               <button type="button" className="modal-btn danger" onClick={confirmDelete}>
                 Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {pendingMemoryless && (
+        <div className="modal-backdrop" onClick={() => setPendingMemoryless(false)}>
+          <div className="modal-card" onClick={(e) => e.stopPropagation()}>
+            <h3 className="modal-title">Start MemoryLess session?</h3>
+            <p className="modal-text">
+              This session will not use or store any memories. Your conversation will be
+              completely private and won&apos;t be remembered.
+            </p>
+            <div className="modal-actions">
+              <button
+                type="button"
+                className="modal-btn cancel"
+                onClick={() => setPendingMemoryless(false)}
+              >
+                Cancel
+              </button>
+              <button type="button" className="modal-btn danger" onClick={confirmMemoryless}>
+                Start private chat
               </button>
             </div>
           </div>

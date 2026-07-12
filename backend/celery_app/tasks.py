@@ -43,6 +43,7 @@ def extract_memories_task(
     user_id: str,
     message_id: str,
     session_id: str | None = None,
+    is_memoryless: bool = False,
 ) -> None:
     """Queue-friendly wrapper around :func:`extract_and_store_memories`.
 
@@ -53,7 +54,12 @@ def extract_memories_task(
     async def _run() -> None:
         async with async_session() as session:
             await extract_and_store_memories(
-                conversation_text, user_id, message_id, session, session_id
+                conversation_text,
+                user_id,
+                message_id,
+                session,
+                session_id,
+                is_memoryless,
             )
 
     _run_async(_run)

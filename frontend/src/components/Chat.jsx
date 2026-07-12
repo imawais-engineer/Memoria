@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 
-export default function Chat({ userId, sessionId, onSessionUpdated }) {
+export default function Chat({ userId, sessionId, isMemoryless = false, onSessionUpdated }) {
   const [messages, setMessages] = useState([])
   const [input, setInput] = useState('')
   const [sending, setSending] = useState(false)
@@ -128,6 +128,11 @@ export default function Chat({ userId, sessionId, onSessionUpdated }) {
 
   return (
     <div className="panel">
+      {isMemoryless && (
+        <div className="memoryless-banner">
+          MemoryLess Session — no memories are read or stored.
+        </div>
+      )}
       <div className="chat-window" ref={windowRef}>
         {loadingHistory && <div className="empty">Loading conversation…</div>}
         {!loadingHistory && messages.length === 0 && !sending && (
