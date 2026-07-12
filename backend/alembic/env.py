@@ -15,9 +15,10 @@ from sqlalchemy.ext.asyncio import async_engine_from_config
 
 from alembic import context
 
-# Import the declarative Base (this also registers the Memory model on
-# ``Base.metadata`` so autogenerate can see the ``memories`` table).
+# Import the declarative Base and register all ORM models on ``Base.metadata``
+# so autogenerate can see every table.
 from app.memory.models import Base
+from app.models.user import User  # noqa: F401
 
 # Prefer the application's configured DATABASE_URL when available so local/CI
 # and deployed environments override the placeholder in alembic.ini.
