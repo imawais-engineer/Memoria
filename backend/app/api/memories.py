@@ -10,8 +10,8 @@ import uuid
 from datetime import datetime
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query
-from pydantic import BaseModel
-from sqlalchemy import delete, select
+from pydantic import BaseModel, Field
+from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import get_settings
@@ -19,6 +19,8 @@ from app.core.database import get_db
 from app.memory.models import Memory
 
 router = APIRouter(prefix="/api", tags=["memories"])
+
+MEMORY_TYPES = ("core", "episodic", "semantic", "procedural")
 
 
 class MemoryOut(BaseModel):
@@ -32,11 +34,95 @@ class MemoryOut(BaseModel):
     decay_rate: float
 
 
+class MemoryStatsOut(BaseModel):
+    """Aggregate memory statistics for the dashboard."""
+
+    total_memories: int
+    consolidated_count: int
+    summaries_count: int
+    avg_importance: float
+    last_consolidation: datetime | None
+    types: dict[str, int] = Field(
+        default_factory=lambda: {memory_type: 0 for memory_type in MEMORY_TYPES}
+    )
+
+
 def require_token(x_api_token: str = Header(default="")) -> None:
     """Simple fixed-token auth for destructive endpoints (demo only)."""
 
     if x_api_token != get_settings().demo_api_token:
         raise HTTPException(status_code=401, detail="Invalid or missing API token")
+
+
+@router.get("/memory-stats", response_model=MemoryStatsOut)
+async def memory_stats(
+    user_id: str = Query(..., min_length=1),
+    db: AsyncSession = Depends(get_db),
+    _: None = Depends(require_token),
+) -> MemoryStatsOut:
+    """Return aggregate memory statistics for the dashboard."""
+
+    active_filter = (Memory.user_id == user_id, Memory.archived.is_(False))
+
+    total_memories = (
+        await db.execute(select(func.count()).select_from(Memory).where(*active_filter))
+    ).scalar_one()
+
+    consolidated_count = (
+        await db.execute(
+            select(func.count())
+            .select_from(Memory)
+            .where(*active_filter, Memory.is_consolidated.is_(True))
+        )
+    ).scalar_one()
+
+    summaries_count = (
+        await db.execute(
+            select(func.count())
+            .select_from(Memory)
+            .where(
+                *active_filter,
+                Memory.meta_data["source"].astext == "consolidation",
+            )
+        )
+    ).scalar_one()
+
+    avg_importance_raw = (
+        await db.execute(
+            select(func.avg(Memory.importance)).select_from(Memory).where(*active_filter)
+        )
+    ).scalar_one()
+    avg_importance = float(avg_importance_raw or 0.0)
+
+    last_consolidation = (
+        await db.execute(
+            select(func.max(Memory.consolidated_at))
+            .select_from(Memory)
+            .where(Memory.user_id == user_id, Memory.consolidated_at.is_not(None))
+        )
+    ).scalar_one()
+
+    type_rows = (
+        await db.execute(
+            select(Memory.type, func.count())
+            .select_from(Memory)
+            .where(*active_filter)
+            .group_by(Memory.type)
+        )
+    ).all()
+
+    types = {memory_type: 0 for memory_type in MEMORY_TYPES}
+    for memory_type, count in type_rows:
+        types[str(memory_type)] = int(count)
+
+    return MemoryStatsOut(
+        total_memories=total_memories,
+        consolidated_count=consolidated_count,
+        summaries_count=summaries_count,
+        avg_importance=round(avg_importance, 2),
+        last_consolidation=last_consolidation,
+        types=types,
+    )
 
 
 @router.get("/memories", response_model=list[MemoryOut])

@@ -234,6 +234,97 @@ body {
 }
 .btn:disabled { opacity: .5; cursor: not-allowed; }
 
+/* Memory dashboard stats */
+.stats-section {
+  margin-bottom: 18px;
+  padding-bottom: 18px;
+  border-bottom: 1px solid var(--border);
+}
+.stats-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 14px;
+}
+.stats-title {
+  font-size: 16px;
+  font-weight: 700;
+  margin: 0;
+}
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 10px;
+  margin-bottom: 16px;
+}
+.stat-card {
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 12px 14px;
+}
+.stat-card-wide {
+  grid-column: span 2;
+}
+.stat-label {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 600;
+  margin-bottom: 6px;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+.stat-value {
+  color: var(--text);
+  font-size: 24px;
+  font-weight: 700;
+  line-height: 1.1;
+}
+.stat-value-sm {
+  font-size: 14px;
+  font-weight: 600;
+}
+.type-chart-panel {
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 14px;
+}
+.type-chart {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 10px;
+}
+.type-chart-row {
+  align-items: center;
+  display: grid;
+  gap: 10px;
+  grid-template-columns: 92px 1fr 28px;
+}
+.type-chart-track {
+  background: rgba(255, 255, 255, 0.04);
+  border-radius: 999px;
+  height: 10px;
+  overflow: hidden;
+}
+.type-chart-bar {
+  border-radius: 999px;
+  height: 100%;
+  min-width: 0;
+  transition: width 0.25s ease;
+}
+.type-chart-bar.bar-core { background: var(--accent-2); }
+.type-chart-bar.bar-episodic { background: var(--accent); }
+.type-chart-bar.bar-semantic { background: #ffc400; }
+.type-chart-bar.bar-procedural { background: var(--danger); }
+.type-chart-count {
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 700;
+  text-align: right;
+}
+
 /* Memory table */
 .table-tools { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
 .refresh { background: var(--panel-2); border: 1px solid var(--border); color: var(--text); padding: 7px 14px; border-radius: 8px; cursor: pointer; }

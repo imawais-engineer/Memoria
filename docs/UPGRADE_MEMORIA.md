@@ -468,7 +468,36 @@ After completing Level 1, these modules add sophistication:
 
 ### 3.1 Enhanced Dashboard & Visualizations
 
-Show memory statistics, consolidation progress, and user insights.
+**Objective:** Upgrade the Memory tab with aggregate statistics and a type distribution chart.
+
+**Files to Modify:**
+- `backend/app/api/memories.py` — add `GET /api/memory-stats`
+- `frontend/src/components/MemoryGraph.jsx` — stats cards + horizontal bar chart
+- `frontend/src/index.css` — dark-theme styling for stats panel
+
+**Backend (`GET /api/memory-stats?user_id=...`):**
+- Requires `X-API-Token` header (same demo token as destructive ops).
+- Returns:
+  ```json
+  {
+    "total_memories": 12,
+    "consolidated_count": 3,
+    "summaries_count": 1,
+    "avg_importance": 0.82,
+    "last_consolidation": "2026-07-11T10:00:00Z",
+    "types": { "core": 2, "episodic": 4, "semantic": 5, "procedural": 1 }
+  }
+  ```
+- Queries: active (non-archived) memories; `is_consolidated=True`; `metadata.source='consolidation'`; `AVG(importance)`; `MAX(consolidated_at)`; counts per `type`.
+
+**Frontend:**
+- Stats section above the memory table with cards for totals, consolidation, summaries, avg importance, last consolidation.
+- CSS-based horizontal bar chart for memory type distribution (no extra chart library).
+- Refresh reloads both `/api/memories` and `/api/memory-stats`.
+
+**How to Verify**
+- Seed a few memories for a user, open the Memory tab, click Refresh.
+- Stats cards and type bars should match the database counts.
 
 ### 3.2 Demo Video Script & Recording
 

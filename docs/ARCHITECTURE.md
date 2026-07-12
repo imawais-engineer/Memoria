@@ -165,7 +165,7 @@ safety, and coherence than memory-less baselines.
 
 | Component | Role |
 |-----------|------|
-| `frontend/` | React/Vite dashboard — Chat tab with Markdown rendering (`react-markdown`), Memory tab |
+| `frontend/` | React/Vite dashboard — Chat (Markdown), Memory tab with stats cards + type chart |
 | `backend/app/main.py` | FastAPI entrypoint — `/health`, `/chat`, `/mcp/memory-skills` |
 | `backend/app/mcp/memory_skill.py` | MCP tool implementations for external agents |
 | `backend/app/memory/consolidation.py` | Clustering + Qwen-Max structured summarization (`json_schema`) |

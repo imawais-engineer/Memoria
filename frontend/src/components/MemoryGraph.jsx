@@ -1,6 +1,17 @@
 import { useCallback, useEffect, useState } from 'react'
 import { DEMO_TOKEN } from '../App.jsx'
 
+const TYPE_ORDER = ['core', 'episodic', 'semantic', 'procedural']
+
+const EMPTY_STATS = {
+  total_memories: 0,
+  consolidated_count: 0,
+  summaries_count: 0,
+  avg_importance: 0,
+  last_consolidation: null,
+  types: Object.fromEntries(TYPE_ORDER.map((type) => [type, 0])),
+}
+
 function formatDate(iso) {
   if (!iso) return '—'
   try {
@@ -10,8 +21,35 @@ function formatDate(iso) {
   }
 }
 
+function TypeBarChart({ types }) {
+  const maxCount = Math.max(...TYPE_ORDER.map((type) => types[type] || 0), 1)
+
+  return (
+    <div className="type-chart">
+      {TYPE_ORDER.map((type) => {
+        const count = types[type] || 0
+        const width = count === 0 ? 0 : Math.max((count / maxCount) * 100, 6)
+
+        return (
+          <div key={type} className="type-chart-row">
+            <span className={`badge ${type}`}>{type}</span>
+            <div className="type-chart-track" aria-hidden="true">
+              <div
+                className={`type-chart-bar bar-${type}`}
+                style={{ width: `${width}%` }}
+              />
+            </div>
+            <span className="type-chart-count">{count}</span>
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
 export default function MemoryGraph({ userId }) {
   const [memories, setMemories] = useState([])
+  const [stats, setStats] = useState(EMPTY_STATS)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
@@ -19,9 +57,15 @@ export default function MemoryGraph({ userId }) {
     setLoading(true)
     setError('')
     try {
-      const res = await fetch(`/api/memories?user_id=${encodeURIComponent(userId)}`)
-      if (!res.ok) throw new Error(`Backend returned ${res.status}`)
-      setMemories(await res.json())
+      const headers = { 'X-API-Token': DEMO_TOKEN }
+      const [memoriesRes, statsRes] = await Promise.all([
+        fetch(`/api/memories?user_id=${encodeURIComponent(userId)}`),
+        fetch(`/api/memory-stats?user_id=${encodeURIComponent(userId)}`, { headers }),
+      ])
+      if (!memoriesRes.ok) throw new Error(`Memories request failed (${memoriesRes.status})`)
+      if (!statsRes.ok) throw new Error(`Stats request failed (${statsRes.status})`)
+      setMemories(await memoriesRes.json())
+      setStats(await statsRes.json())
     } catch (e) {
       setError(e.message || 'Failed to load memories')
     } finally {
@@ -41,7 +85,7 @@ export default function MemoryGraph({ userId }) {
         { method: 'DELETE', headers: { 'X-API-Token': DEMO_TOKEN } },
       )
       if (!res.ok) throw new Error(`Delete failed (${res.status})`)
-      setMemories((list) => list.filter((m) => m.id !== id))
+      await load()
     } catch (e) {
       setError(e.message || 'Failed to delete memory')
     }
@@ -49,13 +93,49 @@ export default function MemoryGraph({ userId }) {
 
   return (
     <div className="panel">
+      <section className="stats-section">
+        <div className="stats-header">
+          <h2 className="stats-title">Stats</h2>
+          <button className="refresh" onClick={load} disabled={loading}>
+            Refresh
+          </button>
+        </div>
+
+        <div className="stats-grid">
+          <div className="stat-card">
+            <div className="stat-label">Total Memories</div>
+            <div className="stat-value">{stats.total_memories}</div>
+          </div>
+          <div className="stat-card">
+            <div className="stat-label">Consolidated</div>
+            <div className="stat-value">{stats.consolidated_count}</div>
+          </div>
+          <div className="stat-card">
+            <div className="stat-label">Summaries</div>
+            <div className="stat-value">{stats.summaries_count}</div>
+          </div>
+          <div className="stat-card">
+            <div className="stat-label">Avg Importance</div>
+            <div className="stat-value">{stats.avg_importance.toFixed(2)}</div>
+          </div>
+          <div className="stat-card stat-card-wide">
+            <div className="stat-label">Last Consolidation</div>
+            <div className="stat-value stat-value-sm">
+              {formatDate(stats.last_consolidation)}
+            </div>
+          </div>
+        </div>
+
+        <div className="type-chart-panel">
+          <div className="stat-label">Memory Types</div>
+          <TypeBarChart types={stats.types || EMPTY_STATS.types} />
+        </div>
+      </section>
+
       <div className="table-tools">
         <div className="muted">
           {loading ? 'Loading…' : `${memories.length} memories for ${userId}`}
         </div>
-        <button className="refresh" onClick={load}>
-          Refresh
-        </button>
       </div>
 
       <table>
