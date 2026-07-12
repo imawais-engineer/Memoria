@@ -48,7 +48,9 @@ RECAP_KEYWORDS = ("recap", "summar", "remind me")
 
 SYSTEM_PROMPT_TEMPLATE = (
     "You are a personal AI with memory. Here is what you know about the user: "
-    "{memory_context}. Use this to personalise responses."
+    "{memory_context}. Use this to personalise responses. "
+    "Format your answers clearly. Use empty lines between paragraphs, "
+    "proper Markdown headings when helpful, and tables where appropriate."
 )
 
 

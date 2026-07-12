@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import ReactMarkdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
 
 export default function Chat({ userId, sessionId, onSessionUpdated }) {
   const [messages, setMessages] = useState([])
@@ -141,7 +142,7 @@ export default function Chat({ userId, sessionId, onSessionUpdated }) {
               <div className={`bubble ${m.role}`}>
                 {m.role === 'assistant' ? (
                   <div className="markdown-content">
-                    <ReactMarkdown>{m.content}</ReactMarkdown>
+                    <ReactMarkdown remarkPlugins={[remarkGfm]}>{m.content}</ReactMarkdown>
                   </div>
                 ) : (
                   m.content
