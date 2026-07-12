@@ -22,6 +22,7 @@ from app.models.user import User
 from app.api.sessions import touch_session_on_message
 from app.memory.reflection import generate_user_reflection, get_latest_reflection
 from app.memory.retrieval import retrieve_context_and_ids
+from app.schemas.persona import format_persona_prompt
 
 logger = logging.getLogger(__name__)
 
@@ -90,6 +91,20 @@ async def _get_global_memory_enabled(user_id: str, db_session: AsyncSession) -> 
     if user is None:
         return True
     return user.global_memory_enabled
+
+
+async def _get_user_persona(user_id: str, db_session: AsyncSession) -> dict | None:
+    """Return the stored persona for a registered user, if any."""
+
+    try:
+        user_uuid = uuid.UUID(user_id)
+    except ValueError:
+        return None
+
+    user = await db_session.get(User, user_uuid)
+    if user is None:
+        return None
+    return user.persona
 
 
 async def _generate_session_summary(
@@ -181,6 +196,7 @@ async def handle_message(
 
     is_memoryless, _ = await _get_session_flags(session_id, db_session)
     global_memory_enabled = await _get_global_memory_enabled(user_id, db_session)
+    user_persona = await _get_user_persona(user_id, db_session)
 
     session_key = f"session:{session_id}"
 
@@ -217,6 +233,7 @@ async def handle_message(
         system_prompt += (
             f"\n\nLatest reflection about the user: {reflection_text}"
         )
+    system_prompt += f"\n\n{format_persona_prompt(user_persona)}"
     if session_summary:
         system_prompt = (
             f"Summary of the conversation so far: {session_summary}\n\n"

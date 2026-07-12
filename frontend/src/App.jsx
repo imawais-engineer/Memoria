@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import Auth from './components/Auth.jsx'
 import Chat from './components/Chat.jsx'
 import MemoryGraph from './components/MemoryGraph.jsx'
+import Persona from './components/Persona.jsx'
 import Sidebar from './components/Sidebar.jsx'
 
 // Fixed demo token expected by the backend for destructive actions.
@@ -39,6 +40,7 @@ export default function App() {
   const [sessionsLoading, setSessionsLoading] = useState(false)
   const [sessionsError, setSessionsError] = useState('')
   const [globalMemoryEnabled, setGlobalMemoryEnabled] = useState(true)
+  const [persona, setPersona] = useState(null)
   const [prefsSaving, setPrefsSaving] = useState(false)
 
   const isLoggedIn = Boolean(auth?.user_id)
@@ -50,6 +52,7 @@ export default function App() {
     localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(user))
     setAuth(user)
     setGlobalMemoryEnabled(user.global_memory_enabled ?? true)
+    setPersona(user.persona ?? null)
     setGuestMode(false)
   }, [])
 
@@ -61,6 +64,8 @@ export default function App() {
     setSessions([])
     setActiveSessionId(null)
     setGlobalMemoryEnabled(true)
+    setPersona(null)
+    setTab('chat')
   }, [])
 
   const fetchPreferences = useCallback(async () => {
@@ -72,10 +77,12 @@ export default function App() {
       if (!res.ok) return
       const data = await res.json()
       setGlobalMemoryEnabled(data.global_memory_enabled)
+      setPersona(data.persona ?? null)
       setAuth((current) => {
         const next = {
           ...current,
           global_memory_enabled: data.global_memory_enabled,
+          persona: data.persona,
         }
         localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(next))
         return next
@@ -273,6 +280,18 @@ export default function App() {
     await loadSessions()
   }, [loadSessions])
 
+  const handlePersonaSaved = useCallback((data) => {
+    setPersona(data.persona ?? null)
+    setAuth((current) => {
+      const updated = {
+        ...current,
+        persona: data.persona,
+      }
+      localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(updated))
+      return updated
+    })
+  }, [])
+
   const handleGlobalMemoryToggle = useCallback(async () => {
     if (!isLoggedIn || prefsSaving) return
     const nextValue = !globalMemoryEnabled
@@ -385,6 +404,14 @@ export default function App() {
               >
                 Memory
               </button>
+              {isLoggedIn && (
+                <button
+                  className={`tab ${tab === 'persona' ? 'active' : ''}`}
+                  onClick={() => setTab('persona')}
+                >
+                  Persona
+                </button>
+              )}
             </div>
 
             {tab === 'chat' ? (
@@ -394,8 +421,14 @@ export default function App() {
                 isMemoryless={isMemoryless}
                 onSessionUpdated={handleSessionUpdated}
               />
-            ) : (
+            ) : tab === 'memory' ? (
               <MemoryGraph userId={userId} />
+            ) : (
+              <Persona
+                userId={auth.user_id}
+                persona={persona}
+                onSaved={handlePersonaSaved}
+              />
             )}
             {sessionsError && <div className="error">{sessionsError}</div>}
           </div>

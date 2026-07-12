@@ -58,6 +58,7 @@ export default function Auth({ onAuth, onGuest }) {
         user_id: data.user_id,
         username: data.username,
         global_memory_enabled: data.global_memory_enabled ?? true,
+        persona: data.persona ?? null,
       })
     } catch {
       setError('Could not reach the server. Is the backend running?')
