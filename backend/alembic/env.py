@@ -18,6 +18,7 @@ from alembic import context
 # Import the declarative Base and register all ORM models on ``Base.metadata``
 # so autogenerate can see every table.
 from app.memory.models import Base
+from app.models.chat_session import ChatSession  # noqa: F401
 from app.models.user import User  # noqa: F401
 
 # Prefer the application's configured DATABASE_URL when available so local/CI

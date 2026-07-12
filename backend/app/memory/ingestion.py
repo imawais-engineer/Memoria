@@ -21,6 +21,7 @@ from app.core.dashscope_client import (
 )
 from app.memory.conflict_detection import detect_conflicts, resolve_conflict
 from app.memory.models import Memory
+from app.models.chat_session import ChatSession  # noqa: F401  (register FK table)
 
 logger = logging.getLogger(__name__)
 
@@ -137,6 +138,7 @@ async def extract_and_store_memories(
     user_id: str,
     message_id: str,
     db_session: AsyncSession,
+    session_id: str | None = None,
 ) -> list[Memory]:
     """Extract memories from a conversation turn and persist them.
 
@@ -164,6 +166,15 @@ async def extract_and_store_memories(
         return []
 
     created: list[Memory] = []
+    session_uuid = None
+    if session_id:
+        try:
+            from uuid import UUID
+
+            session_uuid = UUID(session_id)
+        except ValueError:
+            session_uuid = None
+
     try:
         for item in memory_items:
             content = item.get("content")
@@ -194,6 +205,7 @@ async def extract_and_store_memories(
                 last_accessed=now,
                 expires_at=expires_at,
                 decay_rate=decay_rate,
+                session_id=session_uuid,
                 meta_data={"source_message_id": message_id},
             )
             db_session.add(memory)

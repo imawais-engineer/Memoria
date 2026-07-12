@@ -15,6 +15,7 @@ from app.api.auth import router as auth_router
 from app.api.chat import router as chat_router
 from app.api.feedback import router as feedback_router
 from app.api.memories import router as memories_router
+from app.api.sessions import router as sessions_router
 from app.config import Settings, get_settings
 from app.core.database import get_db  # noqa: F401  (exposed for later routes)
 from app.mcp.memory_skill import MEMORY_TOOL_CATALOG
@@ -74,6 +75,7 @@ def create_app() -> FastAPI:
     application.include_router(chat_router)
     application.include_router(feedback_router)
     application.include_router(memories_router)
+    application.include_router(sessions_router)
 
     return application
 

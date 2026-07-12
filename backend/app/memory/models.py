@@ -94,6 +94,12 @@ class Memory(Base):
     superseded_by: Mapped[UUID | None] = mapped_column(
         PGUUID(as_uuid=True), ForeignKey("memories.id"), nullable=True
     )
+    session_id: Mapped[UUID | None] = mapped_column(
+        PGUUID(as_uuid=True),
+        ForeignKey("chat_sessions.id", ondelete="CASCADE"),
+        nullable=True,
+        index=True,
+    )
 
     def __repr__(self) -> str:
         return (

@@ -17,6 +17,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.dashscope_client import call_qwen_chat, get_embedding
 from app.memory.models import Memory
+from app.models.chat_session import ChatSession  # noqa: F401  (register FK table)
+from app.api.sessions import touch_session_on_message
 from app.memory.reflection import generate_user_reflection, get_latest_reflection
 from app.memory.retrieval import retrieve_context_and_ids
 
@@ -92,6 +94,7 @@ async def _store_summary_memory(
     """Persist the session summary as an episodic memory for cross-session recall."""
 
     embedding = await get_embedding(summary)
+    session_uuid = uuid.UUID(session_id)
     db_session.add(
         Memory(
             user_id=user_id,
@@ -100,6 +103,7 @@ async def _store_summary_memory(
             embedding=embedding,
             importance=SESSION_SUMMARY_IMPORTANCE,
             decay_rate=SESSION_SUMMARY_DECAY_RATE,
+            session_id=session_uuid,
             meta_data={"kind": "session_summary", "session_id": session_id},
         )
     )
@@ -139,6 +143,8 @@ async def handle_message(
 
     if not session_id:
         session_id = str(uuid.uuid4())
+
+    await touch_session_on_message(session_id, user_message, db_session)
 
     session_key = f"session:{session_id}"
 
@@ -215,6 +221,7 @@ async def handle_message(
             conversation_text=conversation_text,
             user_id=user_id,
             message_id=message_id,
+            session_id=session_id,
         )
     except Exception:  # noqa: BLE001 - enqueue failure must not break the reply
         logger.exception("Failed to enqueue extract_memories_task")
