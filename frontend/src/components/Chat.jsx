@@ -7,14 +7,20 @@ import 'katex/dist/katex.min.css'
 
 const SCROLL_THRESHOLD_PX = 50
 
-const MARKDOWN_PLUGINS = [remarkGfm, remarkMath]
-const REHYPE_PLUGINS = [rehypeKatex]
-
 function normalizeAssistantMarkdown(content) {
-  return content
+  let text = content
     .replace(/<br\s*\/?>/gi, '\n')
     .replace(/&lt;br\s*\/?&gt;/gi, '\n')
     .replace(/,([dxyzdtuv])/g, ' \\,$1')
+
+  // Qwen often wraps math with spaces: "$ f(x) $" — remark-math needs tight delimiters.
+  text = text.replace(/\$\$\s*([\s\S]+?)\s*\$\$/g, (_, expr) => `$$\n${expr.trim()}\n$$`)
+  text = text.replace(
+    /(^|[^$])\$\s+([^\n$]+?)\s+\$(?!\$)/g,
+    (_, before, expr) => `${before}$${expr.trim()}$`,
+  )
+
+  return text
 }
 
 function isNearBottom(element) {
@@ -216,8 +222,8 @@ export default function Chat({
                   {m.role === 'assistant' ? (
                     <div className="markdown-content">
                       <ReactMarkdown
-                        remarkPlugins={MARKDOWN_PLUGINS}
-                        rehypePlugins={REHYPE_PLUGINS}
+                        remarkPlugins={[remarkGfm, remarkMath]}
+                        rehypePlugins={[rehypeKatex]}
                       >
                         {normalizeAssistantMarkdown(m.content)}
                       </ReactMarkdown>

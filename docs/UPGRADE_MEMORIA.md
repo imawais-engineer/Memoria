@@ -567,7 +567,7 @@ Strong feature highlights, architecture overview, deployment instructions.
 **Implementation:**
 - Added `remark-math`, `rehype-katex`, and `katex` to the frontend.
 - `Chat.jsx` passes `remarkMath` + `rehypeKatex` to `ReactMarkdown` and imports KaTeX CSS.
-- Preprocessing fixes common Qwen LaTeX typos (e.g. `,dx` → `\,dx`).
+- Preprocessing fixes common Qwen LaTeX typos (e.g. `,dx` → `\,dx`) and tightens spaced delimiters (`$ f(x) $` → `$f(x)$`).
 - Dark-theme overflow styling for display equations in `.markdown-content`.
 
 **How to verify:** Ask for a calculus or trig derivation; equations should render as formatted math, not raw `$...$` text.
