@@ -25,7 +25,7 @@
 - **Thumbs‑up/down feedback** – rate assistant replies to strengthen or weaken the memories that informed them (`POST /api/feedback`).
 - **Structured output** – Qwen structured JSON responses power consolidation, reflection, and conflict resolution with schema fallbacks.
 - **Benchmark‑proven 77.6% improvement** – 12‑scenario evaluation shows memory‑augmented replies score **77.6% higher** on average (see [Benchmark](#benchmark) below).
-- **Markdown chat rendering** – assistant replies render rich Markdown (lists, code, emphasis) in the dashboard.
+- **Markdown + LaTeX chat rendering** – assistant replies render rich Markdown and KaTeX math (`$...$`, `$$...$$`) in the dashboard.
 - **Deployment on Azure + Alibaba Cloud Terraform proof** – live instance on Azure; full stack IaC for Alibaba Cloud in [`infrastructure/acs_deployment.tf`](infrastructure/acs_deployment.tf).
 
 ---

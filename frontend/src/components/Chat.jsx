@@ -1,13 +1,20 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
+import remarkMath from 'remark-math'
+import rehypeKatex from 'rehype-katex'
+import 'katex/dist/katex.min.css'
 
 const SCROLL_THRESHOLD_PX = 50
+
+const MARKDOWN_PLUGINS = [remarkGfm, remarkMath]
+const REHYPE_PLUGINS = [rehypeKatex]
 
 function normalizeAssistantMarkdown(content) {
   return content
     .replace(/<br\s*\/?>/gi, '\n')
     .replace(/&lt;br\s*\/?&gt;/gi, '\n')
+    .replace(/,([dxyzdtuv])/g, ' \\,$1')
 }
 
 function isNearBottom(element) {
@@ -208,7 +215,10 @@ export default function Chat({
                 <div className={`bubble ${m.role}`}>
                   {m.role === 'assistant' ? (
                     <div className="markdown-content">
-                      <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                      <ReactMarkdown
+                        remarkPlugins={MARKDOWN_PLUGINS}
+                        rehypePlugins={REHYPE_PLUGINS}
+                      >
                         {normalizeAssistantMarkdown(m.content)}
                       </ReactMarkdown>
                     </div>

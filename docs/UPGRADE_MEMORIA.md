@@ -560,6 +560,22 @@ Strong feature highlights, architecture overview, deployment instructions.
 
 ---
 
+## Level 3.7 – LaTeX / Math Rendering
+
+**Objective:** Render mathematical equations in assistant chat replies (inline `$...$` and block `$$...$$`).
+
+**Implementation:**
+- Added `remark-math`, `rehype-katex`, and `katex` to the frontend.
+- `Chat.jsx` passes `remarkMath` + `rehypeKatex` to `ReactMarkdown` and imports KaTeX CSS.
+- Preprocessing fixes common Qwen LaTeX typos (e.g. `,dx` → `\,dx`).
+- Dark-theme overflow styling for display equations in `.markdown-content`.
+
+**How to verify:** Ask for a calculus or trig derivation; equations should render as formatted math, not raw `$...$` text.
+
+**Files touched:** `frontend/package.json`, `Chat.jsx`, `index.css`.
+
+---
+
 ## Level 4 – Context-Aware Memory Layering
 
 **Objective:** Re-architect Memoria into distinct, hackathon-optimised memory tiers with clear naming and strict isolation rules.
