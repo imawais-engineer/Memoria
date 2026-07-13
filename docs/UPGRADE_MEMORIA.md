@@ -560,6 +560,31 @@ Strong feature highlights, architecture overview, deployment instructions.
 
 ---
 
+## Level 4 – Context-Aware Memory Layering
+
+**Objective:** Re-architect Memoria into distinct, hackathon-optimised memory tiers with clear naming and strict isolation rules.
+
+### Tier definitions
+
+| Tier | Storage | Purpose |
+|------|---------|---------|
+| **Session Memory** | Redis (last 10 messages) | Short-term context for the active chat; always passed to the model |
+| **Personal Memory** | PostgreSQL `memories` + pgvector | User-centric facts (preferences, identity, goals); importance, decay, consolidation, conflict resolution |
+| **Personal Intelligence (PI)** | User preference `global_memory_enabled` | When ON, retrieve all Personal Memories across sessions; when OFF, only current-session memories + essential facts (`importance >= 0.9`) |
+| **MemoryLess** | Redis only while open | `is_memoryless=True` sessions: no Personal Memory read/write, no Context Archive, PI disabled |
+| **Context Archive** | PostgreSQL `chat_messages` | Full transcripts for non-MemoryLess sessions; queried on demand via `GET /api/search-archive` only |
+
+### Implementation summary
+
+1. **User-centric extraction** — `ingestion.py` system prompt extracts only user-specific facts; Celery receives the user's message only (not the assistant reply).
+2. **Context Archive** — `ChatMessage` model + Alembic migration; `agent_service.py` archives each exchange after reply (skips MemoryLess); `GET /api/search-archive` with `X-API-Token`.
+3. **PI enforcement** — `retrieval.py` scopes Personal Memory by `is_memoryless` / `global_memory_enabled`; system prompt labels PI ON/OFF/MemoryLess in `agent_service.py`.
+4. **MemoryLess isolation** — No extraction, archive, reflection, or cross-session retrieval; frontend banner + disabled PI toggle.
+
+**Files:** `backend/app/memory/ingestion.py`, `retrieval.py`, `services/agent_service.py`, `models/chat_message.py`, `api/archive.py`, `alembic/versions/a7b8c9d0e1f2_*`; `frontend/src/components/Sidebar.jsx`, `Chat.jsx`.
+
+---
+
 ## Final Submission Checklist
 
 Before submitting, ensure:

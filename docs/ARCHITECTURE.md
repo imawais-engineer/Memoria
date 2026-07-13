@@ -27,8 +27,9 @@ graph TD
     subgraph BE_LAYER["Backend layer"]
         API["FastAPI Backend<br/>:8000"]
         MCP["MCP Endpoint<br/>GET /mcp/memory-skills"]
-        AGENT["Agent Service<br/>handle_message"]
-        RETRIEVE["retrieve_context<br/>pgvector hybrid search"]
+        AGENT["Agent Service<br/>handle_message · PI / MemoryLess labels"]
+        RETRIEVE["retrieve_context<br/>Personal Memory · pgvector hybrid search"]
+        ARCHIVE_API["Context Archive API<br/>GET /api/search-archive"]
         MCP_TOOLS["Memory Skill Tools<br/>get_core_memories · get_user_preferences<br/>forget_memory · strengthen_memory"]
     end
 
@@ -42,8 +43,9 @@ graph TD
 
     %% ── Storage ──────────────────────────────────────────────────────────
     subgraph ST_LAYER["Storage layer"]
-        REDIS["Redis<br/>session cache + Celery broker"]
-        PG["PostgreSQL 16 + pgvector<br/>memories table · Vector 1024"]
+        REDIS["Redis<br/>Session Memory · last 10 msgs + Celery broker"]
+        PG["PostgreSQL 16 + pgvector<br/>Personal Memory · memories table"]
+        ARCHIVE["PostgreSQL chat_messages<br/>Context Archive · full transcripts"]
     end
 
     %% ── AI / Qwen ────────────────────────────────────────────────────────
@@ -59,10 +61,13 @@ graph TD
     %% ── Flow 1: Chat with memory retrieval ───────────────────────────────
     BROWSER -->|"① user message POST /chat"| API
     API --> AGENT
-    AGENT -->|"session history"| REDIS
+    AGENT -->|"Session Memory history"| REDIS
+    AGENT -->|"archive exchange (non-MemoryLess)"| ARCHIVE
     AGENT --> RETRIEVE
-    RETRIEVE -->|"similarity × importance × recency"| PG
+    RETRIEVE -->|"Personal Memory · similarity × importance × recency"| PG
     RETRIEVE -->|"query embedding"| EMBED
+    API --> ARCHIVE_API
+    ARCHIVE_API -->|"on-demand ILIKE search"| ARCHIVE
     AGENT -->|"context + message"| QWEN_PLUS
     QWEN_PLUS -->|"personalized reply"| AGENT
     AGENT --> API
@@ -99,9 +104,9 @@ graph TD
     classDef storage fill:#dcfce7,stroke:#15803d,color:#14532d
 
     class BROWSER,L_FE frontend
-    class API,MCP,AGENT,RETRIEVE,MCP_TOOLS,BEAT,W_INGEST,W_DECAY,W_CONSOL,L_BE backend
+    class API,MCP,AGENT,RETRIEVE,ARCHIVE_API,MCP_TOOLS,BEAT,W_INGEST,W_DECAY,W_CONSOL,L_BE backend
     class QWEN_PLUS,QWEN_MAX,EMBED,L_AI ai
-    class REDIS,PG,L_ST storage
+    class REDIS,PG,ARCHIVE,L_ST storage
     class EXT frontend
 ```
 
@@ -114,6 +119,17 @@ graph TD
 | ③ | **Daily decay** | Celery Beat (03:00 UTC) → `apply_decay` → exponential importance decay → soft-delete (`archived`) low-importance memories |
 | ④ | **Weekly consolidation** | Celery Beat (Sat 04:00 UTC) → `consolidate_memories` → cluster by cosine similarity (≥ 0.75) → Qwen-Max summary → link originals via `parent_id` / `is_consolidated` |
 | ⑤ | **MCP interoperability** | External agent → `GET /mcp/memory-skills` → invoke tool (`get_core_memories`, etc.) → ownership-checked DB query → JSON result |
+| ⑥ | **Context Archive** | Each non-MemoryLess reply → `chat_messages`; explicit recall via `GET /api/search-archive?query=...` (token-guarded) |
+
+## Memory tiers (Level 4)
+
+| Tier | Where | Behaviour |
+|------|-------|-----------|
+| **Session Memory** | Redis | Last 10 messages of the active chat; always in the model context |
+| **Personal Memory** | `memories` table | User-centric facts; extraction, decay, consolidation, conflict resolution |
+| **Personal Intelligence** | `users.global_memory_enabled` | ON = all Personal Memories; OFF = current session + `importance >= 0.9` only |
+| **MemoryLess** | Redis only | No Personal Memory read/write, no archive; PI ignored |
+| **Context Archive** | `chat_messages` | Full transcripts; on-demand search only, not routine retrieval |
 
 ## Why this architecture
 
@@ -168,7 +184,9 @@ safety, and coherence than memory-less baselines.
 | `frontend/` | React/Vite dashboard — Chat (Markdown), Memory tab with stats cards + type chart |
 | `backend/app/main.py` | FastAPI entrypoint — `/health`, `/chat`, `/mcp/memory-skills` |
 | `backend/app/mcp/memory_skill.py` | MCP tool implementations for external agents |
-| `backend/app/memory/consolidation.py` | Clustering + Qwen-Max structured summarization (`json_schema`) |
+| `backend/app/models/chat_message.py` | Context Archive ORM (`chat_messages` table) |
+| `backend/app/api/archive.py` | On-demand transcript search (`GET /api/search-archive`) |
+| `backend/app/memory/retrieval.py` | Personal Memory retrieval with PI / MemoryLess scoping |
 | `backend/app/memory/reflection.py` | Structured user reflection synthesis (`traits` in metadata) |
 | `backend/app/memory/conflict_detection.py` | pgvector similarity + structured contradiction checks |
 | `backend/app/core/dashscope_client.py` | DashScope helpers incl. `call_qwen_structured()` |
