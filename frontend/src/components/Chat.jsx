@@ -13,7 +13,11 @@ function normalizeAssistantMarkdown(content) {
     .replace(/&lt;br\s*\/?&gt;/gi, '\n')
     .replace(/,([dxyzdtuv])/g, ' \\,$1')
 
-  // Qwen often wraps math with spaces: "$ f(x) $" — remark-math needs tight delimiters.
+  // Qwen often uses LaTeX \( \) and \[ \] delimiters — convert for remark-math.
+  text = text.replace(/\\\[([\s\S]+?)\\\]/g, (_, expr) => `$$\n${expr.trim()}\n$$`)
+  text = text.replace(/\\\(([\s\S]+?)\\\)/g, (_, expr) => `$${expr.trim()}$`)
+
+  // Qwen often wraps dollar math with spaces: "$ f(x) $" — remark-math needs tight delimiters.
   text = text.replace(/\$\$\s*([\s\S]+?)\s*\$\$/g, (_, expr) => `$$\n${expr.trim()}\n$$`)
   text = text.replace(
     /(^|[^$])\$\s+([^\n$]+?)\s+\$(?!\$)/g,
@@ -222,7 +226,22 @@ export default function Chat({
                   {m.role === 'assistant' ? (
                     <div className="markdown-content">
                       <ReactMarkdown
-                        remarkPlugins={[remarkGfm, remarkMath]}
+                        remarkPlugins={[
+                          remarkGfm,
+                          [
+                            remarkMath,
+                            {
+                              inlineMath: [
+                                ['$', '$'],
+                                ['\\(', '\\)'],
+                              ],
+                              displayMath: [
+                                ['$$', '$$'],
+                                ['\\[', '\\]'],
+                              ],
+                            },
+                          ],
+                        ]}
                         rehypePlugins={[rehypeKatex]}
                       >
                         {normalizeAssistantMarkdown(m.content)}
