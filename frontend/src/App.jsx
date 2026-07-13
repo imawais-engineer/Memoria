@@ -456,7 +456,11 @@ export default function App() {
                 onSessionCreated={handleSessionCreated}
               />
             ) : tab === 'memory' ? (
-              <MemoryGraph userId={userId} sessionId={activeSessionId} />
+              <MemoryGraph
+                userId={userId}
+                username={auth?.username}
+                sessionId={activeSessionId}
+              />
             ) : (
               <Persona
                 userId={auth.user_id}

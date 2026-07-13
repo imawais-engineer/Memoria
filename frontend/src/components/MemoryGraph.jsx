@@ -47,11 +47,13 @@ function TypeBarChart({ types }) {
   )
 }
 
-export default function MemoryGraph({ userId, sessionId = null }) {
+export default function MemoryGraph({ userId, username = null, sessionId = null }) {
   const [memories, setMemories] = useState([])
   const [stats, setStats] = useState(EMPTY_STATS)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+
+  const userLabel = username ? `@${username}` : userId
 
   const sessionMemories = sessionId
     ? memories.filter(
@@ -143,7 +145,7 @@ export default function MemoryGraph({ userId, sessionId = null }) {
         <div className="muted">
           {loading
             ? 'Loading…'
-            : `${sessionMemories.length} memories${sessionId ? ' for this chat' : ''}`}
+            : `${sessionMemories.length} memories for ${userLabel}`}
         </div>
       </div>
 

@@ -546,6 +546,20 @@ Strong feature highlights, architecture overview, deployment instructions.
 
 ---
 
+## Level 3.6 – UI Glitch Fixes
+
+**Objective:** Fix visible polish issues in the deployed dashboard.
+
+**Completed items:**
+
+1. **Memory tab user label** — The memory count line now shows `@username` when logged in (e.g. `0 memories for @awais`) instead of the raw UUID; falls back to `user_id` if username is unavailable.
+2. **Markdown line breaks** — Assistant replies preprocess `<br>` / `&lt;br&gt;` tags into newlines before `ReactMarkdown` rendering (no raw HTML plugin required).
+3. **Smart auto-scroll** — Chat scrolls smoothly to new messages only when the user is already near the bottom (50px threshold); a floating “scroll to bottom” button appears when reading older messages. Thin, subtle scrollbar styling on the chat container.
+
+**Files touched:** `frontend/src/components/MemoryGraph.jsx`, `Chat.jsx`, `App.jsx`, `index.css`.
+
+---
+
 ## Final Submission Checklist
 
 Before submitting, ensure:

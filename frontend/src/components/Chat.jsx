@@ -1,6 +1,21 @@
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
+
+const SCROLL_THRESHOLD_PX = 50
+
+function normalizeAssistantMarkdown(content) {
+  return content
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/&lt;br\s*\/?&gt;/gi, '\n')
+}
+
+function isNearBottom(element) {
+  return (
+    element.scrollHeight - element.scrollTop - element.clientHeight <=
+    SCROLL_THRESHOLD_PX
+  )
+}
 
 export default function Chat({
   userId,
@@ -14,12 +29,38 @@ export default function Chat({
   const [sending, setSending] = useState(false)
   const [loadingHistory, setLoadingHistory] = useState(false)
   const [error, setError] = useState('')
+  const [showScrollDown, setShowScrollDown] = useState(false)
   const windowRef = useRef(null)
+  const stickToBottomRef = useRef(true)
+
+  const scrollToBottom = useCallback((behavior = 'smooth') => {
+    const element = windowRef.current
+    if (!element) return
+    element.scrollTo({ top: element.scrollHeight, behavior })
+    stickToBottomRef.current = true
+    setShowScrollDown(false)
+  }, [])
+
+  useEffect(() => {
+    const element = windowRef.current
+    if (!element) return undefined
+
+    function handleScroll() {
+      const atBottom = isNearBottom(element)
+      stickToBottomRef.current = atBottom
+      setShowScrollDown(!atBottom)
+    }
+
+    element.addEventListener('scroll', handleScroll, { passive: true })
+    return () => element.removeEventListener('scroll', handleScroll)
+  }, [])
 
   useEffect(() => {
     if (!sessionId || isPendingSession) {
       setMessages([])
       setLoadingHistory(false)
+      stickToBottomRef.current = true
+      setShowScrollDown(false)
       return
     }
 
@@ -27,6 +68,7 @@ export default function Chat({
     async function loadHistory() {
       setLoadingHistory(true)
       setError('')
+      stickToBottomRef.current = true
       try {
         const res = await fetch(
           `/sessions/${encodeURIComponent(sessionId)}/history?user_id=${encodeURIComponent(userId)}`,
@@ -60,9 +102,10 @@ export default function Chat({
   }, [userId, sessionId, isPendingSession])
 
   useEffect(() => {
-    if (windowRef.current) {
-      windowRef.current.scrollTop = windowRef.current.scrollHeight
-    }
+    if (!stickToBottomRef.current) return
+    const element = windowRef.current
+    if (!element) return
+    element.scrollTo({ top: element.scrollHeight, behavior: 'smooth' })
   }, [messages, sending, loadingHistory])
 
   async function sendFeedback(messageIndex, rating) {
@@ -95,6 +138,8 @@ export default function Chat({
     if (!text || sending || !sessionId) return
     setError('')
     setInput('')
+    stickToBottomRef.current = true
+    setShowScrollDown(false)
     setMessages((m) => [...m, { role: 'user', content: text }])
     setSending(true)
     try {
@@ -143,62 +188,77 @@ export default function Chat({
           MemoryLess Session – nothing will be remembered.
         </div>
       )}
-      <div className="chat-window" ref={windowRef}>
-        {loadingHistory && (
-          <div className="empty">
-            <span className="spinner spinner-inline" aria-hidden="true" />
-            Loading conversation…
-          </div>
-        )}
-        {!loadingHistory && messages.length === 0 && !sending && (
-          <div className="empty">Say hello — I&apos;ll remember what matters.</div>
-        )}
-        {!loadingHistory &&
-          messages.map((m, i) => (
-            <div
-              key={i}
-              className={`bubble-row ${m.role === 'user' ? 'user-row' : 'assistant-row'}`}
-            >
-              <div className={`bubble ${m.role}`}>
-                {m.role === 'assistant' ? (
-                  <div className="markdown-content">
-                    <ReactMarkdown remarkPlugins={[remarkGfm]}>{m.content}</ReactMarkdown>
+      <div className="chat-window-wrap">
+        <div className="chat-window" ref={windowRef}>
+          {loadingHistory && (
+            <div className="empty">
+              <span className="spinner spinner-inline" aria-hidden="true" />
+              Loading conversation…
+            </div>
+          )}
+          {!loadingHistory && messages.length === 0 && !sending && (
+            <div className="empty">Say hello — I&apos;ll remember what matters.</div>
+          )}
+          {!loadingHistory &&
+            messages.map((m, i) => (
+              <div
+                key={i}
+                className={`bubble-row ${m.role === 'user' ? 'user-row' : 'assistant-row'}`}
+              >
+                <div className={`bubble ${m.role}`}>
+                  {m.role === 'assistant' ? (
+                    <div className="markdown-content">
+                      <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                        {normalizeAssistantMarkdown(m.content)}
+                      </ReactMarkdown>
+                    </div>
+                  ) : (
+                    m.content
+                  )}
+                </div>
+                {m.role === 'assistant' && m.memory_ids?.length > 0 && (
+                  <div className="feedback-buttons">
+                    <button
+                      type="button"
+                      className={`feedback-btn ${m.feedback === 'positive' ? 'selected positive' : ''}`}
+                      onClick={() => sendFeedback(i, 'positive')}
+                      disabled={Boolean(m.feedback)}
+                      title="Helpful response"
+                      aria-label="Thumbs up"
+                    >
+                      👍
+                    </button>
+                    <button
+                      type="button"
+                      className={`feedback-btn ${m.feedback === 'negative' ? 'selected negative' : ''}`}
+                      onClick={() => sendFeedback(i, 'negative')}
+                      disabled={Boolean(m.feedback)}
+                      title="Unhelpful response"
+                      aria-label="Thumbs down"
+                    >
+                      👎
+                    </button>
                   </div>
-                ) : (
-                  m.content
                 )}
               </div>
-              {m.role === 'assistant' && m.memory_ids?.length > 0 && (
-                <div className="feedback-buttons">
-                  <button
-                    type="button"
-                    className={`feedback-btn ${m.feedback === 'positive' ? 'selected positive' : ''}`}
-                    onClick={() => sendFeedback(i, 'positive')}
-                    disabled={Boolean(m.feedback)}
-                    title="Helpful response"
-                    aria-label="Thumbs up"
-                  >
-                    👍
-                  </button>
-                  <button
-                    type="button"
-                    className={`feedback-btn ${m.feedback === 'negative' ? 'selected negative' : ''}`}
-                    onClick={() => sendFeedback(i, 'negative')}
-                    disabled={Boolean(m.feedback)}
-                    title="Unhelpful response"
-                    aria-label="Thumbs down"
-                  >
-                    👎
-                  </button>
-                </div>
-              )}
+            ))}
+          {sending && (
+            <div className="bubble assistant typing">
+              <span className="spinner spinner-inline" aria-hidden="true" />
+              Thinking…
             </div>
-          ))}
-        {sending && (
-          <div className="bubble assistant typing">
-            <span className="spinner spinner-inline" aria-hidden="true" />
-            Thinking…
-          </div>
+          )}
+        </div>
+        {showScrollDown && (
+          <button
+            type="button"
+            className="scroll-to-bottom"
+            onClick={() => scrollToBottom('smooth')}
+            aria-label="Scroll to latest messages"
+            title="Scroll to bottom"
+          >
+            ↓
+          </button>
         )}
       </div>
 

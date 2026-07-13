@@ -96,6 +96,10 @@ body {
 }
 
 /* Chat */
+.chat-window-wrap {
+  position: relative;
+}
+
 .chat-window {
   height: 440px;
   overflow-y: auto;
@@ -103,6 +107,48 @@ body {
   flex-direction: column;
   gap: 10px;
   padding: 6px 4px;
+  scroll-behavior: smooth;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(154, 160, 184, 0.35) transparent;
+}
+
+.chat-window::-webkit-scrollbar {
+  width: 6px;
+}
+
+.chat-window::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.chat-window::-webkit-scrollbar-thumb {
+  background: rgba(154, 160, 184, 0.35);
+  border-radius: 999px;
+}
+
+.chat-window::-webkit-scrollbar-thumb:hover {
+  background: rgba(154, 160, 184, 0.55);
+}
+
+.scroll-to-bottom {
+  position: absolute;
+  right: 12px;
+  bottom: 12px;
+  width: 36px;
+  height: 36px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: rgba(23, 26, 43, 0.92);
+  color: var(--text);
+  cursor: pointer;
+  font-size: 16px;
+  line-height: 1;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.28);
+  transition: border-color 0.15s ease, transform 0.15s ease;
+}
+
+.scroll-to-bottom:hover {
+  border-color: var(--accent);
+  transform: translateY(-1px);
 }
 .empty { color: var(--muted); text-align: center; margin: auto; }
 .bubble {
