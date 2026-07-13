@@ -32,8 +32,11 @@ QWEN_MODEL = "qwen-plus"
 EMBEDDING_MODEL = DEFAULT_EMBEDDING_MODEL
 
 SYSTEM_PROMPT = (
-    "You are a memory extraction assistant. Extract factual memories from the "
-    "conversation."
+    "You are a memory extraction assistant. Extract only factual statements "
+    "about the user, such as their preferences, identity, goals, behaviours, "
+    "and personal circumstances. Do not extract general knowledge, assistant "
+    "opinions, or information that is not directly about the user. If no "
+    "user-specific facts are found, return an empty memories list."
 )
 
 # Decay rate applied per memory type (core memories never decay).

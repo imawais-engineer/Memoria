@@ -279,12 +279,11 @@ async def handle_message(
     # 7. Fire-and-forget background memory extraction from this exchange.
     if not is_memoryless:
         message_id = str(uuid.uuid4())
-        conversation_text = f"User: {user_message}\nAssistant: {reply}"
         try:
             from celery_app.tasks import extract_memories_task
 
             extract_memories_task.delay(
-                conversation_text=conversation_text,
+                conversation_text=user_message,
                 user_id=user_id,
                 message_id=message_id,
                 session_id=session_id,
