@@ -36,6 +36,8 @@ class Settings(BaseSettings):
     )
 
     dashscope_api_key: str = ""
+    # Alternate secret name used by some Cursor environments.
+    qwen_dashscope_api: str = ""
     # Optional DashScope endpoint override. Leave empty for the SDK default
     # (Beijing); set to the international endpoint for intl-region keys, e.g.
     # https://dashscope-intl.aliyuncs.com/api/v1

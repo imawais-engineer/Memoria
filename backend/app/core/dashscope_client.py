@@ -41,7 +41,12 @@ def get_dashscope_client() -> ModuleType:
     """
 
     settings = get_settings()
-    api_key = settings.dashscope_api_key or os.getenv("DASHSCOPE_API_KEY", "")
+    api_key = (
+        settings.dashscope_api_key
+        or settings.qwen_dashscope_api
+        or os.getenv("DASHSCOPE_API_KEY", "")
+        or os.getenv("QWEN_DASHSCOPE_API", "")
+    )
 
     if not api_key:
         # Not fatal at import/config time; the actual API call will fail clearly
