@@ -18,9 +18,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.dashscope_client import call_qwen_chat, get_embedding
 from app.memory.models import Memory
 from app.models.chat_message import ChatMessage
-from app.models.chat_session import ChatSession
 from app.models.user import User
-from app.api.sessions import touch_session_on_message
+from app.api.sessions import ensure_session_exists, touch_session_on_message
 from app.memory.reflection import generate_user_reflection, get_latest_reflection
 from app.memory.retrieval import retrieve_context_and_ids
 from app.schemas.persona import format_persona_prompt
@@ -96,22 +95,6 @@ def _wants_recap(message: str) -> bool:
 
     lowered = message.lower()
     return any(keyword in lowered for keyword in RECAP_KEYWORDS)
-
-
-async def _get_session_flags(
-    session_id: str, db_session: AsyncSession
-) -> tuple[bool, bool]:
-    """Return ``(is_memoryless, session_exists)`` for a chat session."""
-
-    try:
-        session_uuid = uuid.UUID(session_id)
-    except ValueError:
-        return False, False
-
-    session = await db_session.get(ChatSession, session_uuid)
-    if session is None:
-        return False, False
-    return session.is_memoryless, True
 
 
 async def _get_global_memory_enabled(user_id: str, db_session: AsyncSession) -> bool:
@@ -216,6 +199,7 @@ async def handle_message(
     user_message: str,
     session_id: str | None = None,
     *,
+    is_memoryless: bool = False,
     db_session: AsyncSession,
     redis_client: redis.Redis,
 ) -> dict:
@@ -227,9 +211,15 @@ async def handle_message(
     if not session_id:
         session_id = str(uuid.uuid4())
 
-    await touch_session_on_message(session_id, user_message, db_session)
+    session = await ensure_session_exists(
+        session_id,
+        user_id,
+        is_memoryless=is_memoryless,
+        db=db_session,
+    )
+    is_memoryless = session.is_memoryless
 
-    is_memoryless, _ = await _get_session_flags(session_id, db_session)
+    await touch_session_on_message(session_id, user_message, db_session)
     global_memory_enabled = await _get_global_memory_enabled(user_id, db_session)
     user_persona = await _get_user_persona(user_id, db_session)
 

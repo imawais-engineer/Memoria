@@ -47,11 +47,18 @@ function TypeBarChart({ types }) {
   )
 }
 
-export default function MemoryGraph({ userId }) {
+export default function MemoryGraph({ userId, sessionId = null }) {
   const [memories, setMemories] = useState([])
   const [stats, setStats] = useState(EMPTY_STATS)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+
+  const sessionMemories = sessionId
+    ? memories.filter(
+        (memory) =>
+          !memory.session_id || memory.session_id === sessionId || memory.type === 'core',
+      )
+    : memories
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -134,7 +141,9 @@ export default function MemoryGraph({ userId }) {
 
       <div className="table-tools">
         <div className="muted">
-          {loading ? 'Loading…' : `${memories.length} memories for ${userId}`}
+          {loading
+            ? 'Loading…'
+            : `${sessionMemories.length} memories${sessionId ? ' for this chat' : ''}`}
         </div>
       </div>
 
@@ -150,7 +159,7 @@ export default function MemoryGraph({ userId }) {
           </tr>
         </thead>
         <tbody>
-          {memories.map((m) => (
+          {sessionMemories.map((m) => (
             <tr key={m.id}>
               <td>
                 <span className={`badge ${m.type}`}>{m.type}</span>
@@ -166,10 +175,10 @@ export default function MemoryGraph({ userId }) {
               </td>
             </tr>
           ))}
-          {!loading && memories.length === 0 && (
+          {!loading && sessionMemories.length === 0 && (
             <tr>
-              <td colSpan="6" className="muted">
-                No memories yet for this user.
+              <td colSpan="6" className="muted empty-state-cell">
+                No memories in this chat yet.
               </td>
             </tr>
           )}

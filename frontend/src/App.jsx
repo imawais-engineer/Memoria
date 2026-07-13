@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import Auth from './components/Auth.jsx'
 import Chat from './components/Chat.jsx'
+import Landing from './components/Landing.jsx'
 import MemoryGraph from './components/MemoryGraph.jsx'
 import Persona from './components/Persona.jsx'
 import Sidebar from './components/Sidebar.jsx'
@@ -14,8 +15,8 @@ function sessionStorageKey(userId) {
   return `memoria_active_session_${userId}`
 }
 
-function randomUserId() {
-  return 'user-' + Math.random().toString(36).slice(2, 8)
+function newPendingSession(isMemoryless = false) {
+  return { sessionId: crypto.randomUUID(), isMemoryless }
 }
 
 function loadStoredAuth() {
@@ -33,39 +34,45 @@ function loadStoredAuth() {
 export default function App() {
   const [tab, setTab] = useState('chat')
   const [auth, setAuth] = useState(loadStoredAuth)
-  const [guestMode, setGuestMode] = useState(false)
-  const [legacyUserId, setLegacyUserId] = useState(randomUserId)
+  const [authView, setAuthView] = useState('landing')
   const [sessions, setSessions] = useState([])
   const [activeSessionId, setActiveSessionId] = useState(null)
+  const [pendingSession, setPendingSession] = useState(null)
   const [sessionsLoading, setSessionsLoading] = useState(false)
   const [sessionsError, setSessionsError] = useState('')
+  const [creatingChat, setCreatingChat] = useState(false)
   const [globalMemoryEnabled, setGlobalMemoryEnabled] = useState(true)
   const [persona, setPersona] = useState(null)
   const [prefsSaving, setPrefsSaving] = useState(false)
 
   const isLoggedIn = Boolean(auth?.user_id)
-  const userId = isLoggedIn ? auth.user_id : legacyUserId
+  const userId = auth?.user_id
   const activeSession = sessions.find((session) => session.session_id === activeSessionId)
-  const isMemoryless = Boolean(activeSession?.is_memoryless)
+  const isPendingSession = Boolean(
+    pendingSession && pendingSession.sessionId === activeSessionId,
+  )
+  const isMemoryless = isPendingSession
+    ? pendingSession.isMemoryless
+    : Boolean(activeSession?.is_memoryless)
 
   const handleAuth = useCallback((user) => {
     localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(user))
     setAuth(user)
     setGlobalMemoryEnabled(user.global_memory_enabled ?? true)
     setPersona(user.persona ?? null)
-    setGuestMode(false)
+    setAuthView('app')
   }, [])
 
   const handleLogout = useCallback(() => {
     localStorage.removeItem(AUTH_STORAGE_KEY)
     setAuth(null)
-    setGuestMode(false)
-    setLegacyUserId(randomUserId())
     setSessions([])
     setActiveSessionId(null)
+    setPendingSession(null)
     setGlobalMemoryEnabled(true)
     setPersona(null)
     setTab('chat')
+    setAuthView('landing')
   }, [])
 
   const fetchPreferences = useCallback(async () => {
@@ -100,6 +107,7 @@ export default function App() {
   }, [isLoggedIn, auth?.user_id, auth?.global_memory_enabled, fetchPreferences])
 
   const loadSessions = useCallback(async () => {
+    if (!userId) return []
     setSessionsLoading(true)
     setSessionsError('')
     try {
@@ -145,30 +153,20 @@ export default function App() {
     [deleteSessionById],
   )
 
-  const createSession = useCallback(
-    async (isMemoryless = false) => {
-      const res = await fetch('/sessions', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ user_id: userId, is_memoryless: isMemoryless }),
-      })
-      if (!res.ok) throw new Error(`Failed to create session (${res.status})`)
-      const session = await res.json()
-      setSessions((current) => [
-        session,
-        ...current.filter((item) => item.session_id !== session.session_id),
-      ])
-      setActiveSessionId(session.session_id)
-      if (!isMemoryless) {
-        localStorage.setItem(sessionStorageKey(userId), session.session_id)
-      }
-      return session
-    },
-    [userId],
-  )
+  const startPendingChat = useCallback((isMemoryless = false) => {
+    const pending = newPendingSession(isMemoryless)
+    setPendingSession(pending)
+    setActiveSessionId(pending.sessionId)
+    if (!isMemoryless) {
+      localStorage.setItem(sessionStorageKey(userId), pending.sessionId)
+    } else {
+      localStorage.removeItem(sessionStorageKey(userId))
+    }
+    setTab('chat')
+  }, [userId])
 
   useEffect(() => {
-    if (!isLoggedIn && !guestMode) return
+    if (!isLoggedIn || !userId) return
 
     let cancelled = false
 
@@ -186,40 +184,42 @@ export default function App() {
         : null
 
       if (savedSession) {
+        setPendingSession(null)
         setActiveSessionId(savedSession.session_id)
         return
       }
 
       if (cleaned.length > 0) {
+        setPendingSession(null)
         setActiveSessionId(cleaned[0].session_id)
         localStorage.setItem(sessionStorageKey(userId), cleaned[0].session_id)
         return
       }
 
-      try {
-        await createSession(false)
-      } catch (e) {
-        if (!cancelled) setSessionsError(e.message || 'Failed to create chat session')
-      }
+      const pending = newPendingSession(false)
+      setPendingSession(pending)
+      setActiveSessionId(pending.sessionId)
     }
 
     bootstrapSessions()
     return () => {
       cancelled = true
     }
-  }, [userId, isLoggedIn, guestMode, loadSessions, createSession, cleanupMemorylessSessions])
+  }, [userId, isLoggedIn, loadSessions, cleanupMemorylessSessions])
 
   const handleSelectSession = useCallback(
     async (sessionId) => {
       if (
         activeSession?.is_memoryless &&
         activeSessionId &&
-        sessionId !== activeSessionId
+        sessionId !== activeSessionId &&
+        !isPendingSession
       ) {
         await deleteSessionById(activeSessionId, { quiet: true })
       }
 
       const target = sessions.find((session) => session.session_id === sessionId)
+      setPendingSession(null)
       setActiveSessionId(sessionId)
       if (!target?.is_memoryless) {
         localStorage.setItem(sessionStorageKey(userId), sessionId)
@@ -228,26 +228,65 @@ export default function App() {
       }
       setTab('chat')
     },
-    [activeSession, activeSessionId, deleteSessionById, sessions, userId],
+    [
+      activeSession,
+      activeSessionId,
+      deleteSessionById,
+      isPendingSession,
+      sessions,
+      userId,
+    ],
   )
 
-  const handleNewChat = useCallback(
-    async (isMemoryless = false) => {
-      try {
-        if (
-          activeSession?.is_memoryless &&
-          activeSessionId
-        ) {
-          await deleteSessionById(activeSessionId, { quiet: true })
-        }
-        await createSession(isMemoryless)
-        setTab('chat')
-      } catch (e) {
-        setSessionsError(e.message || 'Failed to create chat session')
+  const handleNewChat = useCallback(async () => {
+    setSessionsError('')
+    setCreatingChat(true)
+    try {
+      if (
+        activeSession?.is_memoryless &&
+        activeSessionId &&
+        !isPendingSession
+      ) {
+        await deleteSessionById(activeSessionId, { quiet: true })
       }
-    },
-    [activeSession, activeSessionId, createSession, deleteSessionById],
-  )
+      startPendingChat(false)
+    } catch (e) {
+      setSessionsError(e.message || 'Failed to start chat')
+    } finally {
+      setCreatingChat(false)
+    }
+  }, [
+    activeSession,
+    activeSessionId,
+    deleteSessionById,
+    isPendingSession,
+    startPendingChat,
+  ])
+
+  const handleNewMemorylessChat = useCallback(async () => {
+    setSessionsError('')
+    setCreatingChat(true)
+    try {
+      if (
+        activeSession?.is_memoryless &&
+        activeSessionId &&
+        !isPendingSession
+      ) {
+        await deleteSessionById(activeSessionId, { quiet: true })
+      }
+      startPendingChat(true)
+    } catch (e) {
+      setSessionsError(e.message || 'Failed to start memoryless chat')
+    } finally {
+      setCreatingChat(false)
+    }
+  }, [
+    activeSession,
+    activeSessionId,
+    deleteSessionById,
+    isPendingSession,
+    startPendingChat,
+  ])
 
   const handleDeleteSession = useCallback(
     async (sessionId) => {
@@ -260,7 +299,7 @@ export default function App() {
           if (remaining.length > 0) {
             await handleSelectSession(remaining[0].session_id)
           } else {
-            await createSession(false)
+            startPendingChat(false)
           }
         }
       } catch (e) {
@@ -269,16 +308,24 @@ export default function App() {
     },
     [
       activeSessionId,
-      createSession,
       deleteSessionById,
       handleSelectSession,
       sessions,
+      startPendingChat,
     ],
   )
 
-  const handleSessionUpdated = useCallback(async () => {
-    await loadSessions()
-  }, [loadSessions])
+  const handleSessionCreated = useCallback(
+    async (sessionId, { isMemoryless: createdMemoryless }) => {
+      setPendingSession(null)
+      setActiveSessionId(sessionId)
+      if (!createdMemoryless) {
+        localStorage.setItem(sessionStorageKey(userId), sessionId)
+      }
+      await loadSessions()
+    },
+    [loadSessions, userId],
+  )
 
   const handlePersonaSaved = useCallback((data) => {
     setPersona(data.persona ?? null)
@@ -325,7 +372,9 @@ export default function App() {
   }, [auth?.user_id, globalMemoryEnabled, isLoggedIn, prefsSaving])
 
   useEffect(() => {
-    if (!activeSession?.is_memoryless || !activeSessionId) return undefined
+    if (!activeSession?.is_memoryless || !activeSessionId || isPendingSession) {
+      return undefined
+    }
 
     function cleanupOnUnload() {
       const url = `/sessions/${encodeURIComponent(activeSessionId)}?user_id=${encodeURIComponent(userId)}`
@@ -334,10 +383,13 @@ export default function App() {
 
     window.addEventListener('beforeunload', cleanupOnUnload)
     return () => window.removeEventListener('beforeunload', cleanupOnUnload)
-  }, [activeSession?.is_memoryless, activeSessionId, userId])
+  }, [activeSession?.is_memoryless, activeSessionId, isPendingSession, userId])
 
-  if (!isLoggedIn && !guestMode) {
-    return <Auth onAuth={handleAuth} onGuest={() => setGuestMode(true)} />
+  if (!isLoggedIn) {
+    if (authView === 'landing') {
+      return <Landing onLaunch={() => setAuthView('auth')} />
+    }
+    return <Auth onAuth={handleAuth} />
   }
 
   return (
@@ -349,52 +401,28 @@ export default function App() {
             <div className="title">Memoria</div>
             <div className="subtitle">Personal AI with long-term memory</div>
           </div>
-          {isLoggedIn ? (
-            <div className="header-actions">
-              <label
-                className={`pref-toggle ${isMemoryless ? 'disabled' : ''}`}
-                title={
-                  isMemoryless
-                    ? 'Personal Intelligence is unavailable during MemoryLess sessions'
-                    : 'When ON, the agent recalls Personal Memories and summaries from all chats. When OFF, only Session Memory and essential (core) facts are used.'
-                }
-              >
-                <input
-                  type="checkbox"
-                  checked={globalMemoryEnabled}
-                  onChange={handleGlobalMemoryToggle}
-                  disabled={prefsSaving || isMemoryless}
-                />
-                <span>Personal Intelligence</span>
-              </label>
-              <span className="user-greeting">@{auth.username}</span>
-              <button type="button" className="logout-btn" onClick={handleLogout}>
-                Logout
-              </button>
-            </div>
-          ) : null}
-        </div>
-
-        {!isLoggedIn && guestMode && (
-          <div className="userbar">
-            <label htmlFor="uid">User ID</label>
-            <input
-              id="uid"
-              value={legacyUserId}
-              onChange={(e) => setLegacyUserId(e.target.value)}
-              placeholder="user id"
-            />
+          <div className="header-actions">
+            <span className="user-greeting">@{auth.username}</span>
+            <button type="button" className="logout-btn" onClick={handleLogout}>
+              Logout
+            </button>
           </div>
-        )}
+        </div>
 
         <div className="workspace">
           <Sidebar
             sessions={sessions}
             activeSessionId={activeSessionId}
             loading={sessionsLoading}
+            globalMemoryEnabled={globalMemoryEnabled}
+            prefsSaving={prefsSaving}
+            isMemoryless={isMemoryless}
+            creatingChat={creatingChat}
             onSelect={handleSelectSession}
             onNewChat={handleNewChat}
+            onNewMemorylessChat={handleNewMemorylessChat}
             onDelete={handleDeleteSession}
+            onGlobalMemoryToggle={handleGlobalMemoryToggle}
           />
 
           <div className="main-panel">
@@ -411,25 +439,24 @@ export default function App() {
               >
                 Memory
               </button>
-              {isLoggedIn && (
-                <button
-                  className={`tab ${tab === 'persona' ? 'active' : ''}`}
-                  onClick={() => setTab('persona')}
-                >
-                  Persona
-                </button>
-              )}
+              <button
+                className={`tab ${tab === 'persona' ? 'active' : ''}`}
+                onClick={() => setTab('persona')}
+              >
+                Persona
+              </button>
             </div>
 
             {tab === 'chat' ? (
               <Chat
                 userId={userId}
                 sessionId={activeSessionId}
+                isPendingSession={isPendingSession}
                 isMemoryless={isMemoryless}
-                onSessionUpdated={handleSessionUpdated}
+                onSessionCreated={handleSessionCreated}
               />
             ) : tab === 'memory' ? (
-              <MemoryGraph userId={userId} />
+              <MemoryGraph userId={userId} sessionId={activeSessionId} />
             ) : (
               <Persona
                 userId={auth.user_id}

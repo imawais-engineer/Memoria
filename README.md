@@ -71,6 +71,8 @@ Then start the dashboard:
 cd frontend && npm install && npm run dev   # http://localhost:5173
 ```
 
+Open **http://localhost:5173** — you’ll see the Memoria landing page. Click **Launch App** to sign up or log in (username + favorite book). The chat UI uses lazy session creation: new chats appear in the sidebar only after you send the first message. Use the sidebar for **Personal Intelligence**, **New Chat**, and **Memoryless** private sessions.
+
 ### 2b. Run locally (without Docker)
 
 Requires Python 3.12, Node 18+, PostgreSQL 16 with the `pgvector` extension, and Redis.
@@ -144,7 +146,7 @@ cd backend && python ../scripts/benchmark.py
 
 ```
 backend/          FastAPI app, memory subsystem, MCP skills, Celery, Alembic
-frontend/         React (Vite) admin dashboard (Chat + Memory tabs)
+frontend/         React (Vite) dashboard — landing, auth, chat, memory, persona
 infrastructure/   Terraform for Alibaba Cloud deployment
 scripts/          Benchmark suite and results
 docs/             Architecture, roadmap, upgrade notes

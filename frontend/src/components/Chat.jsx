@@ -2,7 +2,13 @@ import { useEffect, useRef, useState } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 
-export default function Chat({ userId, sessionId, isMemoryless = false, onSessionUpdated }) {
+export default function Chat({
+  userId,
+  sessionId,
+  isPendingSession = false,
+  isMemoryless = false,
+  onSessionCreated,
+}) {
   const [messages, setMessages] = useState([])
   const [input, setInput] = useState('')
   const [sending, setSending] = useState(false)
@@ -11,8 +17,9 @@ export default function Chat({ userId, sessionId, isMemoryless = false, onSessio
   const windowRef = useRef(null)
 
   useEffect(() => {
-    if (!sessionId) {
+    if (!sessionId || isPendingSession) {
       setMessages([])
+      setLoadingHistory(false)
       return
     }
 
@@ -50,7 +57,7 @@ export default function Chat({ userId, sessionId, isMemoryless = false, onSessio
     return () => {
       cancelled = true
     }
-  }, [userId, sessionId])
+  }, [userId, sessionId, isPendingSession])
 
   useEffect(() => {
     if (windowRef.current) {
@@ -98,6 +105,7 @@ export default function Chat({ userId, sessionId, isMemoryless = false, onSessio
           user_id: userId,
           message: text,
           session_id: sessionId,
+          is_memoryless: isMemoryless,
         }),
       })
       if (!res.ok) throw new Error(`Backend returned ${res.status}`)
@@ -111,7 +119,9 @@ export default function Chat({ userId, sessionId, isMemoryless = false, onSessio
           feedback: null,
         },
       ])
-      onSessionUpdated?.()
+      if (isPendingSession) {
+        onSessionCreated?.(data.session_id, { isMemoryless })
+      }
     } catch (e) {
       setError(e.message || 'Failed to send message')
     } finally {
@@ -134,7 +144,12 @@ export default function Chat({ userId, sessionId, isMemoryless = false, onSessio
         </div>
       )}
       <div className="chat-window" ref={windowRef}>
-        {loadingHistory && <div className="empty">Loading conversation…</div>}
+        {loadingHistory && (
+          <div className="empty">
+            <span className="spinner spinner-inline" aria-hidden="true" />
+            Loading conversation…
+          </div>
+        )}
         {!loadingHistory && messages.length === 0 && !sending && (
           <div className="empty">Say hello — I&apos;ll remember what matters.</div>
         )}
@@ -179,7 +194,12 @@ export default function Chat({ userId, sessionId, isMemoryless = false, onSessio
               )}
             </div>
           ))}
-        {sending && <div className="bubble assistant typing">Thinking…</div>}
+        {sending && (
+          <div className="bubble assistant typing">
+            <span className="spinner spinner-inline" aria-hidden="true" />
+            Thinking…
+          </div>
+        )}
       </div>
 
       <div className="composer">
@@ -191,7 +211,7 @@ export default function Chat({ userId, sessionId, isMemoryless = false, onSessio
           disabled={sending || !sessionId}
         />
         <button className="btn" onClick={send} disabled={sending || !input.trim() || !sessionId}>
-          Send
+          {sending ? 'Sending…' : 'Send'}
         </button>
       </div>
       {error && <div className="error">{error}</div>}

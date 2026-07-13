@@ -529,6 +529,23 @@ Strong feature highlights, architecture overview, deployment instructions.
 
 ---
 
+## Level 3.5 – UI/UX Polish
+
+**Objective:** Make the Memoria demo more intuitive and judge-friendly.
+
+**Completed items:**
+
+1. **Removed guest mode** — Login/signup is required; the “Continue as guest (manual user ID)” flow was removed from `Auth.jsx` and `App.jsx`.
+2. **Lazy session creation** — “+ New Chat” uses a client-side UUID until the first message is sent; the backend creates the persistent session atomically in `POST /chat` via `ensure_session_exists()`. Empty chats no longer appear in the sidebar (`GET /sessions` filters sessions with messages).
+3. **Personal Intelligence in sidebar** — The PI toggle moved from the header to the sidebar (below New Chat), with a descriptive tooltip; still backed by `GET/PATCH /auth/preferences`.
+4. **New Memoryless Chat button** — Replaced the MemoryLess checkbox with a “🕶️ Memoryless” sidebar button and confirmation modal; memoryless sessions show a distinct badge in the list.
+5. **Loading & empty states** — Spinners on auth submit, persona save, chat send, and sidebar actions; Memory tab shows “No memories in this chat yet.” when the current chat has none; consistent “No chats yet” sidebar empty state.
+6. **Landing page** — `Landing.jsx` shows project highlights and benchmark summary before login; “Launch App” opens the auth screen.
+
+**Files touched:** `frontend/src/App.jsx`, `Auth.jsx`, `Sidebar.jsx`, `Chat.jsx`, `Landing.jsx`, `MemoryGraph.jsx`, `Persona.jsx`, `index.css`; `backend/app/api/sessions.py`, `chat.py`, `memories.py`; `backend/app/services/agent_service.py`.
+
+---
+
 ## Final Submission Checklist
 
 Before submitting, ensure:

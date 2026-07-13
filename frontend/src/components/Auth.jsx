@@ -1,6 +1,6 @@
 import { useState } from 'react'
 
-export default function Auth({ onAuth, onGuest }) {
+export default function Auth({ onAuth }) {
   const [mode, setMode] = useState('login')
   const [form, setForm] = useState({
     first_name: '',
@@ -150,17 +150,20 @@ export default function Auth({ onAuth, onGuest }) {
           </label>
 
           <button className="btn auth-submit" type="submit" disabled={submitting}>
-            {submitting ? 'Please wait…' : mode === 'signup' ? 'Create account' : 'Log in'}
+            {submitting ? (
+              <span className="btn-loading">
+                <span className="spinner" aria-hidden="true" />
+                Please wait…
+              </span>
+            ) : mode === 'signup' ? (
+              'Create account'
+            ) : (
+              'Log in'
+            )}
           </button>
         </form>
 
         {error && <div className="error auth-error">{error}</div>}
-
-        {onGuest && (
-          <button type="button" className="guest-link" onClick={onGuest}>
-            Continue as guest (manual user ID)
-          </button>
-        )}
       </div>
     </div>
   )

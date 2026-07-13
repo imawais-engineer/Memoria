@@ -18,6 +18,7 @@ class ChatRequest(BaseModel):
     user_id: str
     message: str
     session_id: str | None = None
+    is_memoryless: bool = False
 
 
 class ChatResponse(BaseModel):
@@ -38,6 +39,7 @@ async def chat(
         body.user_id,
         body.message,
         body.session_id,
+        is_memoryless=body.is_memoryless,
         db_session=db,
         redis_client=redis_client,
     )

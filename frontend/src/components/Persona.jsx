@@ -146,7 +146,14 @@ export default function Persona({ userId, persona, onSaved }) {
         )}
 
         <button className="btn persona-save" type="submit" disabled={saving}>
-          {saving ? 'Saving…' : 'Save'}
+          {saving ? (
+            <span className="btn-loading">
+              <span className="spinner" aria-hidden="true" />
+              Saving…
+            </span>
+          ) : (
+            'Save'
+          )}
         </button>
       </form>
 

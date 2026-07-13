@@ -9,12 +9,13 @@ from datetime import datetime, timezone
 import redis.asyncio as redis
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
-from sqlalchemy import func, select, update
+from sqlalchemy import exists, func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
 from app.core.redis_client import get_redis
 from app.memory.models import Memory
+from app.models.chat_message import ChatMessage
 from app.models.chat_session import ChatSession  # noqa: F401  (register FK table)
 from app.models.chat_session import ChatSession
 
@@ -112,6 +113,55 @@ async def _get_owned_session(
     return session
 
 
+def _session_has_messages_filter():
+    """Sessions that have at least one archived message or a non-default title."""
+
+    return or_(
+        ChatSession.title != DEFAULT_TITLE,
+        exists().where(ChatMessage.session_id == ChatSession.id),
+    )
+
+
+async def ensure_session_exists(
+    session_id: str,
+    user_id: str,
+    *,
+    is_memoryless: bool = False,
+    db: AsyncSession,
+) -> ChatSession:
+    """Create a chat session on first message when the id is not yet persisted."""
+
+    try:
+        session_uuid = uuid.UUID(session_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid session id")
+
+    existing = await db.get(ChatSession, session_uuid)
+    if existing is not None:
+        registered_id, guest_id = _parse_owner(user_id)
+        owned = (
+            existing.user_id == registered_id
+            if registered_id is not None
+            else existing.guest_user_id == guest_id
+        )
+        if not owned:
+            raise HTTPException(status_code=404, detail="Session not found")
+        return existing
+
+    registered_id, guest_id = _parse_owner(user_id)
+    session = ChatSession(
+        id=session_uuid,
+        user_id=registered_id,
+        guest_user_id=guest_id,
+        title=DEFAULT_TITLE,
+        is_memoryless=is_memoryless,
+    )
+    db.add(session)
+    await db.commit()
+    await db.refresh(session)
+    return session
+
+
 async def touch_session_on_message(
     session_id: str,
     user_message: str,
@@ -170,7 +220,7 @@ async def list_sessions(
     rows = (
         await db.execute(
             select(ChatSession)
-            .where(_owner_filter(user_id))
+            .where(_owner_filter(user_id), _session_has_messages_filter())
             .order_by(ChatSession.updated_at.desc())
         )
     ).scalars().all()

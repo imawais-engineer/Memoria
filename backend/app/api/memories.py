@@ -32,6 +32,7 @@ class MemoryOut(BaseModel):
     importance: float
     created_at: datetime | None
     decay_rate: float
+    session_id: str | None = None
 
 
 class MemoryStatsOut(BaseModel):
@@ -146,6 +147,7 @@ async def list_memories(
             importance=m.importance,
             created_at=m.created_at,
             decay_rate=m.decay_rate,
+            session_id=str(m.session_id) if m.session_id else None,
         )
         for m in rows
     ]

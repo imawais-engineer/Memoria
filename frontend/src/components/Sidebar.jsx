@@ -1,15 +1,23 @@
 import { useState } from 'react'
 
+const PI_TOOLTIP =
+  'When enabled, I can access all your memories across chats. When disabled, I only see this session\'s context and essential facts.'
+
 export default function Sidebar({
   sessions,
   activeSessionId,
   loading,
+  globalMemoryEnabled,
+  prefsSaving,
+  isMemoryless,
+  creatingChat,
   onSelect,
   onNewChat,
+  onNewMemorylessChat,
   onDelete,
+  onGlobalMemoryToggle,
 }) {
   const [pendingDelete, setPendingDelete] = useState(null)
-  const [memorylessChecked, setMemorylessChecked] = useState(false)
   const [pendingMemoryless, setPendingMemoryless] = useState(false)
 
   function confirmDelete() {
@@ -19,39 +27,64 @@ export default function Sidebar({
     }
   }
 
-  function handleNewChatClick() {
-    if (memorylessChecked) {
-      setPendingMemoryless(true)
-      return
-    }
-    onNewChat(false)
-  }
-
   function confirmMemoryless() {
     setPendingMemoryless(false)
-    setMemorylessChecked(false)
-    onNewChat(true)
+    onNewMemorylessChat()
   }
 
   return (
     <aside className="sidebar">
       <div className="sidebar-new-row">
-        <button type="button" className="btn sidebar-new" onClick={handleNewChatClick}>
-          + New Chat
+        <button
+          type="button"
+          className="btn sidebar-new"
+          onClick={onNewChat}
+          disabled={creatingChat}
+        >
+          {creatingChat ? (
+            <span className="btn-loading">
+              <span className="spinner" aria-hidden="true" />
+              Starting…
+            </span>
+          ) : (
+            '+ New Chat'
+          )}
+        </button>
+        <button
+          type="button"
+          className="btn sidebar-new sidebar-memoryless-btn"
+          onClick={() => setPendingMemoryless(true)}
+          disabled={creatingChat}
+          title="Start a private chat with no memory storage"
+        >
+          🕶️ Memoryless
         </button>
       </div>
 
-      <label className="memoryless-toggle">
+      <label
+        className={`pref-toggle sidebar-pi ${isMemoryless ? 'disabled' : ''}`}
+        title={
+          isMemoryless
+            ? 'Personal Intelligence is unavailable during MemoryLess sessions'
+            : PI_TOOLTIP
+        }
+      >
         <input
           type="checkbox"
-          checked={memorylessChecked}
-          onChange={(e) => setMemorylessChecked(e.target.checked)}
+          checked={globalMemoryEnabled}
+          onChange={onGlobalMemoryToggle}
+          disabled={prefsSaving || isMemoryless}
         />
-        <span>MemoryLess Mode</span>
+        <span>Personal Intelligence</span>
       </label>
 
       <div className="sidebar-list">
-        {loading && <div className="sidebar-empty">Loading chats…</div>}
+        {loading && (
+          <div className="sidebar-empty">
+            <span className="spinner spinner-inline" aria-hidden="true" />
+            Loading chats…
+          </div>
+        )}
         {!loading && sessions.length === 0 && (
           <div className="sidebar-empty">No chats yet</div>
         )}
