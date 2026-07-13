@@ -130,7 +130,7 @@ export default function Chat({ userId, sessionId, isMemoryless = false, onSessio
     <div className="panel">
       {isMemoryless && (
         <div className="memoryless-banner">
-          MemoryLess Session — no memories are read or stored.
+          MemoryLess Session – nothing will be remembered.
         </div>
       )}
       <div className="chat-window" ref={windowRef}>

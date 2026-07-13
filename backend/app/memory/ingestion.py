@@ -32,11 +32,11 @@ QWEN_MODEL = "qwen-plus"
 EMBEDDING_MODEL = DEFAULT_EMBEDDING_MODEL
 
 SYSTEM_PROMPT = (
-    "You are a memory extraction assistant. Extract only factual statements "
-    "about the user, such as their preferences, identity, goals, behaviours, "
-    "and personal circumstances. Do not extract general knowledge, assistant "
-    "opinions, or information that is not directly about the user. If no "
-    "user-specific facts are found, return an empty memories list."
+    "You are a memory extraction assistant. Extract ONLY factual statements "
+    "about the user – their preferences, identity, goals, behaviors, and "
+    "personal circumstances. Do NOT extract general knowledge, assistant "
+    "opinions, or information not directly about the user. If no user-specific "
+    "facts are found, return an empty memories list."
 )
 
 # Decay rate applied per memory type (core memories never decay).
@@ -57,8 +57,8 @@ EXTRACT_MEMORIES_TOOL: list[dict[str, Any]] = [
         "function": {
             "name": "extract_memories",
             "description": (
-                "Extract durable, factual memories about the user from the "
-                "conversation."
+                "Extract durable, user-specific factual memories from the "
+                "user's message."
             ),
             "parameters": {
                 "type": "object",

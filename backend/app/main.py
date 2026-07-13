@@ -11,6 +11,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
 from app import __version__
+from app.api.archive import router as archive_router
 from app.api.auth import router as auth_router
 from app.api.chat import router as chat_router
 from app.api.feedback import router as feedback_router
@@ -75,6 +76,7 @@ def create_app() -> FastAPI:
     application.include_router(chat_router)
     application.include_router(feedback_router)
     application.include_router(memories_router)
+    application.include_router(archive_router)
     application.include_router(sessions_router)
 
     return application

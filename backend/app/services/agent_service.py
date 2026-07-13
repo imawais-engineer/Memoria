@@ -17,6 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.dashscope_client import call_qwen_chat, get_embedding
 from app.memory.models import Memory
+from app.models.chat_message import ChatMessage
 from app.models.chat_session import ChatSession
 from app.models.user import User
 from app.api.sessions import touch_session_on_message
@@ -54,6 +55,40 @@ SYSTEM_PROMPT_TEMPLATE = (
     "Format your answers clearly. Use empty lines between paragraphs, "
     "proper Markdown headings when helpful, and tables where appropriate."
 )
+
+
+def _memory_mode_label(is_memoryless: bool, global_memory_enabled: bool) -> str:
+    """Return the Personal Intelligence / MemoryLess status line for the prompt."""
+
+    if is_memoryless:
+        return "[MemoryLess Session – no personal memories are available.]"
+    if global_memory_enabled:
+        return (
+            "[Personal Intelligence is ON. You have full access to the "
+            "user's life memories.]"
+        )
+    return (
+        "[Personal Intelligence is OFF. You are using only this session's "
+        "context and the user's essential facts.]"
+    )
+
+
+async def _archive_chat_messages(
+    session_id: str,
+    user_message: str,
+    reply: str,
+    db_session: AsyncSession,
+) -> None:
+    """Persist a full exchange to the Context Archive for deep recall."""
+
+    session_uuid = uuid.UUID(session_id)
+    db_session.add(
+        ChatMessage(session_id=session_uuid, role="user", content=user_message)
+    )
+    db_session.add(
+        ChatMessage(session_id=session_uuid, role="assistant", content=reply)
+    )
+    await db_session.commit()
 
 
 def _wants_recap(message: str) -> bool:
@@ -228,7 +263,11 @@ async def handle_message(
     # 3-4. Build the message list: system prompt + history + current message.
     # Prepend the rolling session summary (if any) so context survives trimming.
     session_summary = await redis_client.get(f"{session_key}:summary")
-    system_prompt = SYSTEM_PROMPT_TEMPLATE.format(memory_context=memory_context)
+    memory_display = memory_context or "(none)"
+    system_prompt = (
+        f"{_memory_mode_label(is_memoryless, global_memory_enabled)}\n\n"
+        + SYSTEM_PROMPT_TEMPLATE.format(memory_context=memory_display)
+    )
     if reflection_text:
         system_prompt += (
             f"\n\nLatest reflection about the user: {reflection_text}"
@@ -247,6 +286,13 @@ async def handle_message(
 
     # 5. Call Qwen for the assistant reply.
     reply = await call_qwen_chat(messages, model=CHAT_MODEL)
+
+    # 5b. Archive the exchange for on-demand deep recall (non-MemoryLess only).
+    if not is_memoryless:
+        try:
+            await _archive_chat_messages(session_id, user_message, reply, db_session)
+        except Exception:  # noqa: BLE001 - archive must not break chat
+            logger.exception("Failed to archive chat messages for session_id=%s", session_id)
 
     # 6. Persist the exchange to Redis, trimmed to the last N messages.
     await redis_client.rpush(

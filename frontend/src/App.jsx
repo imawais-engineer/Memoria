@@ -351,12 +351,19 @@ export default function App() {
           </div>
           {isLoggedIn ? (
             <div className="header-actions">
-              <label className="pref-toggle" title="Access memories across all chats">
+              <label
+                className={`pref-toggle ${isMemoryless ? 'disabled' : ''}`}
+                title={
+                  isMemoryless
+                    ? 'Personal Intelligence is unavailable during MemoryLess sessions'
+                    : 'When ON, the agent recalls Personal Memories and summaries from all chats. When OFF, only Session Memory and essential (core) facts are used.'
+                }
+              >
                 <input
                   type="checkbox"
                   checked={globalMemoryEnabled}
                   onChange={handleGlobalMemoryToggle}
-                  disabled={prefsSaving}
+                  disabled={prefsSaving || isMemoryless}
                 />
                 <span>Personal Intelligence</span>
               </label>
