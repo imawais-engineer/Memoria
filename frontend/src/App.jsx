@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useState } from 'react'
-import Auth from './components/Auth.jsx'
 import Chat from './components/Chat.jsx'
 import Landing from './components/Landing.jsx'
 import MemoryGraph from './components/MemoryGraph.jsx'
@@ -46,7 +45,6 @@ function loadStoredAuth() {
 export default function App() {
   const [tab, setTab] = useState('chat')
   const [auth, setAuth] = useState(loadStoredAuth)
-  const [authView, setAuthView] = useState('landing')
   const [sessions, setSessions] = useState([])
   const [activeSessionId, setActiveSessionId] = useState(null)
   const [pendingSession, setPendingSession] = useState(null)
@@ -72,7 +70,6 @@ export default function App() {
     setAuth(user)
     setGlobalMemoryEnabled(user.global_memory_enabled ?? true)
     setPersona(user.persona ?? null)
-    setAuthView('app')
   }, [])
 
   const handleLogout = useCallback(() => {
@@ -84,7 +81,6 @@ export default function App() {
     setGlobalMemoryEnabled(true)
     setPersona(null)
     setTab('chat')
-    setAuthView('landing')
   }, [])
 
   const fetchPreferences = useCallback(async () => {
@@ -398,10 +394,7 @@ export default function App() {
   }, [activeSession?.is_memoryless, activeSessionId, isPendingSession, userId])
 
   if (!isLoggedIn) {
-    if (authView === 'landing') {
-      return <Landing onLaunch={() => setAuthView('auth')} />
-    }
-    return <Auth onAuth={handleAuth} />
+    return <Landing onAuth={handleAuth} />
   }
 
   return (

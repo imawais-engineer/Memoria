@@ -1,6 +1,6 @@
 import { useState } from 'react'
 
-export default function Auth({ onAuth }) {
+export default function Auth({ onAuth, embedded = false }) {
   const [mode, setMode] = useState('login')
   const [form, setForm] = useState({
     first_name: '',
@@ -68,15 +68,17 @@ export default function Auth({ onAuth }) {
   }
 
   return (
-    <div className="auth-wrapper">
+    <div className={`auth-wrapper${embedded ? ' auth-wrapper--embedded' : ''}`}>
       <div className="auth-card">
-        <div className="auth-header">
-          <div className="logo">M</div>
-          <div>
-            <div className="title">Memoria</div>
-            <div className="subtitle">Personal AI with long-term memory</div>
+        {!embedded && (
+          <div className="auth-header">
+            <div className="logo">M</div>
+            <div>
+              <div className="title">Memoria</div>
+              <div className="subtitle">Personal AI with long-term memory</div>
+            </div>
           </div>
-        </div>
+        )}
 
         <div className="auth-tabs">
           <button

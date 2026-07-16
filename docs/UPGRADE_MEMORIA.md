@@ -540,9 +540,9 @@ Strong feature highlights, architecture overview, deployment instructions.
 3. **Personal Intelligence in sidebar** — The PI toggle moved from the header to the sidebar (below New Chat), with a descriptive tooltip; still backed by `GET/PATCH /auth/preferences`.
 4. **New Memoryless Chat button** — Replaced the MemoryLess checkbox with a “🕶️ Memoryless” sidebar button and confirmation modal; memoryless sessions show a distinct badge in the list.
 5. **Loading & empty states** — Spinners on auth submit, persona save, chat send, and sidebar actions; Memory tab shows “No memories in this chat yet.” when the current chat has none; consistent “No chats yet” sidebar empty state.
-6. **Landing page** — `Landing.jsx` shows project highlights and benchmark summary before login; “Launch App” opens the auth screen.
+6. **Landing page** — `Landing.jsx` is a full public marketing page (hero, features, timeline, benchmarks, embedded auth) before login; **Get Started** smooth-scrolls to the auth card.
 
-**Files touched:** `frontend/src/App.jsx`, `Auth.jsx`, `Sidebar.jsx`, `Chat.jsx`, `Landing.jsx`, `MemoryGraph.jsx`, `Persona.jsx`, `index.css`; `backend/app/api/sessions.py`, `chat.py`, `memories.py`; `backend/app/services/agent_service.py`.
+**Files touched:** `frontend/src/App.jsx`, `Auth.jsx`, `Sidebar.jsx`, `Chat.jsx`, `Landing.jsx`, `Landing.css`, `MemoryGraph.jsx`, `Persona.jsx`, `index.css`; `backend/app/api/sessions.py`, `chat.py`, `memories.py`; `backend/app/services/agent_service.py`.
 
 ---
 
@@ -573,6 +573,38 @@ Strong feature highlights, architecture overview, deployment instructions.
 **How to verify:** Ask for a calculus or trig derivation; equations should render as formatted math, not raw `$...$` text.
 
 **Files touched:** `frontend/package.json`, `Chat.jsx`, `index.css`.
+
+---
+
+## Level 3.8 – Public Landing Page Redesign
+
+**Objective:** Replace the minimal pre-login screen with a futuristic, high-conversion public landing page suitable for hackathon judges and demo video recording.
+
+**Design:**
+- Dark theme (deep black, electric purple `#8b5cf6`, cyan `#22d3ee`)
+- Animated grid background with floating particles and glow orbs
+- Glassmorphism cards with backdrop blur
+- Scroll-triggered reveal animations (`IntersectionObserver`)
+- Fully responsive layout (desktop-first, mobile-friendly)
+- CSS-only styling in `Landing.css` (no extra libraries)
+
+**Page sections (`Landing.jsx`):**
+
+| Section | ID / anchor | Content |
+|---------|-------------|---------|
+| Navbar | sticky top | Logo, Features / How it Works / Benchmarks links, **Get Started** (smooth scroll) |
+| Hero | — | Headline, subheadline, **Get Started Free** + **View on GitHub**, CSS neural-network visual |
+| Features | `#features` | 6 glass cards (persistent memory, forgetting, PI, MemoryLess, MCP, feedback) |
+| How it Works | `#how-it-works` | 4-step Qwen-powered timeline |
+| Benchmarks | `#benchmarks` | **Up to 78%** stat, inline bars, chart image `public/images/benchmark.svg` |
+| Auth | `#get-started` | Embedded `<Auth embedded onAuth={…} />` — no separate auth route |
+| Footer | — | GitHub, Devpost, Architecture, Docs links |
+
+**Auth flow change:** `App.jsx` renders a single `<Landing onAuth={handleAuth} />` when logged out. The previous two-step flow (`Landing` → separate `Auth` view via `authView` state) was removed. Successful login/signup still calls `onAuth` and transitions to the main dashboard.
+
+**Files touched:** `frontend/src/components/Landing.jsx`, `Landing.css`, `Auth.jsx` (`embedded` prop), `App.jsx`, `public/images/benchmark.svg`; removed legacy `.landing-*` rules from `index.css`.
+
+**How to verify:** Run `npm run dev` in `frontend/` and open http://localhost:5173 — all sections visible; **Get Started** scrolls to auth; signup/login enters the chat UI.
 
 ---
 
