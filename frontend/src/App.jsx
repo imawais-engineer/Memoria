@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
+import CreatePanel from './components/CreatePanel.jsx'
 import Chat from './components/Chat.jsx'
 import Landing from './components/Landing.jsx'
 import MemoryGraph from './components/MemoryGraph.jsx'
@@ -450,6 +451,12 @@ export default function App() {
               >
                 Persona
               </button>
+              <button
+                className={`tab ${tab === 'create' ? 'active' : ''}`}
+                onClick={() => setTab('create')}
+              >
+                Create
+              </button>
             </div>
 
             {tab === 'chat' ? (
@@ -466,6 +473,8 @@ export default function App() {
                 username={auth?.username}
                 sessionId={activeSessionId}
               />
+            ) : tab === 'create' ? (
+              <CreatePanel userId={userId} />
             ) : (
               <Persona
                 userId={auth.user_id}

@@ -27,6 +27,20 @@ logger = logging.getLogger(__name__)
 # Default Qwen model used for memory extraction / tool calling.
 DEFAULT_MODEL = "qwen3-plus"
 
+# Chat models exposed to the frontend model switcher.
+CHAT_MODELS = [
+    {"id": "qwen-plus", "name": "Qwen Plus (balanced)"},
+    {"id": "qwen-max", "name": "Qwen Max (powerful)"},
+    {"id": "qwq-plus", "name": "QwQ Plus (reasoning)"},
+    {"id": "qwen-turbo", "name": "Qwen Turbo (fast)"},
+]
+ALLOWED_CHAT_MODELS = {item["id"] for item in CHAT_MODELS}
+DEFAULT_CHAT_MODEL = "qwen-plus"
+
+# Multimodal generation models (DashScope console IDs).
+IMAGE_MODEL = "wan2.1-t2i-plus"
+VIDEO_MODEL = "wan2.1-t2v-turbo"
+
 # Default embedding model.
 DEFAULT_EMBEDDING_MODEL = "text-embedding-v3"
 
@@ -291,3 +305,122 @@ async def get_embedding(
         )
 
     return response.output["embeddings"][0]["embedding"]
+
+
+def _dashscope_status_ok(response: Any) -> bool:
+    status_code = getattr(response, "status_code", HTTPStatus.OK)
+    return status_code == HTTPStatus.OK
+
+
+def _raise_dashscope_error(response: Any, label: str) -> None:
+    code = getattr(response, "code", None)
+    message = getattr(response, "message", None)
+    status_code = getattr(response, "status_code", None)
+    logger.error(
+        "DashScope %s returned non-OK status %s (code=%s): %s",
+        label,
+        status_code,
+        code,
+        message,
+    )
+    raise RuntimeError(
+        f"DashScope {label} failed with status {status_code} "
+        f"(code={code}): {message}"
+    )
+
+
+def _extract_image_url(response: Any) -> str:
+    output = getattr(response, "output", None) or {}
+    results = output.get("results") if isinstance(output, dict) else getattr(output, "results", None)
+    if not results:
+        raise RuntimeError("DashScope image response missing results")
+
+    first = results[0]
+    url = first.get("url") if isinstance(first, dict) else getattr(first, "url", None)
+    if not url:
+        raise RuntimeError("DashScope image response missing url")
+    return url
+
+
+def _extract_video_url(response: Any) -> str:
+    output = getattr(response, "output", None) or {}
+    url = output.get("video_url") if isinstance(output, dict) else getattr(output, "video_url", None)
+    if not url:
+        raise RuntimeError("DashScope video response missing video_url")
+    return url
+
+
+async def generate_image(
+    prompt: str,
+    size: str = "1024x1024",
+    model: str = IMAGE_MODEL,
+) -> str:
+    """Generate an image and return its URL."""
+
+    from dashscope import ImageSynthesis
+
+    get_dashscope_client()
+
+    def _invoke() -> Any:
+        response = ImageSynthesis.call(
+            model=model,
+            prompt=prompt,
+            n=1,
+            size=size,
+        )
+        if not _dashscope_status_ok(response):
+            return response
+
+        try:
+            return _extract_image_url(response)
+        except RuntimeError:
+            waited = ImageSynthesis.wait(response)
+            if not _dashscope_status_ok(waited):
+                return waited
+            return _extract_image_url(waited)
+
+    try:
+        result = await asyncio.to_thread(_invoke)
+    except Exception:  # noqa: BLE001
+        logger.exception("DashScope ImageSynthesis failed (model=%s)", model)
+        raise
+
+    if isinstance(result, str):
+        return result
+
+    if not _dashscope_status_ok(result):
+        _raise_dashscope_error(result, "image synthesis")
+    return _extract_image_url(result)
+
+
+async def generate_video(
+    prompt: str,
+    duration: int = 5,
+    model: str = VIDEO_MODEL,
+) -> str:
+    """Generate a video and return its URL."""
+
+    from dashscope import VideoSynthesis
+
+    get_dashscope_client()
+
+    def _invoke() -> Any:
+        task = VideoSynthesis.async_call(
+            model=model,
+            prompt=prompt,
+            duration=duration,
+        )
+        if not _dashscope_status_ok(task):
+            return task
+        result = VideoSynthesis.wait(task)
+        return result
+
+    try:
+        response = await asyncio.to_thread(_invoke)
+    except Exception:  # noqa: BLE001
+        logger.exception("DashScope VideoSynthesis failed (model=%s)", model)
+        raise
+
+    if not _dashscope_status_ok(response):
+        _raise_dashscope_error(response, "video synthesis")
+    return _extract_video_url(response)

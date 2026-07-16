@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import datetime
 from uuid import UUID, uuid4
 
-from sqlalchemy import Boolean, DateTime, String, func, text
+from sqlalchemy import Boolean, DateTime, Integer, String, func, text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.orm import Mapped, mapped_column
@@ -29,6 +29,18 @@ class User(Base):
         Boolean, nullable=False, default=True, server_default=text("true")
     )
     persona: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    image_count: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=0, server_default=text("0")
+    )
+    video_count: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=0, server_default=text("0")
+    )
+    max_images: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=5, server_default=text("5")
+    )
+    max_videos: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=2, server_default=text("2")
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )

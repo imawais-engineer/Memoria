@@ -15,7 +15,7 @@ import uuid
 import redis.asyncio as redis
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.dashscope_client import call_qwen_chat, get_embedding
+from app.core.dashscope_client import ALLOWED_CHAT_MODELS, DEFAULT_CHAT_MODEL, call_qwen_chat, get_embedding
 from app.memory.models import Memory
 from app.models.chat_message import ChatMessage
 from app.models.user import User
@@ -200,6 +200,7 @@ async def handle_message(
     session_id: str | None = None,
     *,
     is_memoryless: bool = False,
+    model: str = DEFAULT_CHAT_MODEL,
     db_session: AsyncSession,
     redis_client: redis.Redis,
 ) -> dict:
@@ -207,6 +208,9 @@ async def handle_message(
 
     ``db_session`` and ``redis_client`` are injected (from FastAPI dependencies).
     """
+
+    if model not in ALLOWED_CHAT_MODELS:
+        model = DEFAULT_CHAT_MODEL
 
     if not session_id:
         session_id = str(uuid.uuid4())
@@ -275,7 +279,7 @@ async def handle_message(
     )
 
     # 5. Call Qwen for the assistant reply.
-    reply = await call_qwen_chat(messages, model=CHAT_MODEL)
+    reply = await call_qwen_chat(messages, model=model)
 
     # 5b. Archive the exchange for on-demand deep recall (non-MemoryLess only).
     if not is_memoryless:

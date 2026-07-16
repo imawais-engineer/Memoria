@@ -608,6 +608,38 @@ Strong feature highlights, architecture overview, deployment instructions.
 
 ---
 
+## Level 3.9 – Multimodal Generation & Chat Model Switcher
+
+**Objective:** Add DashScope image/video generation with per-user quotas and let users pick the Qwen chat model per session.
+
+**Backend**
+
+| Component | Details |
+|-----------|---------|
+| User quotas | `users.image_count`, `video_count`, `max_images` (default 5), `max_videos` (default 2) |
+| `generated_assets` table | Stores each image/video URL, prompt, type, and timestamp |
+| `app/services/usage.py` | `check_and_increment_usage(db, user_id, media_type)` → `False` at limit |
+| Image API | `POST /api/generate/image` — model `wan2.1-t2i-plus` via `ImageSynthesis.call` |
+| Video API | `POST /api/generate/video` — model `wan2.1-t2v-turbo` via `VideoSynthesis.async_call` + `wait` |
+| Gallery | `GET /api/generate/assets?user_id=...` — assets + remaining quota |
+| Models list | `GET /api/models` — `qwen-plus`, `qwen-max`, `qwq-plus`, `qwen-turbo` |
+| Chat | `POST /chat` accepts optional `model` (default `qwen-plus`) passed to `call_qwen_chat` |
+
+**Migrations:** `b8c9d0e1f2a3` (user limits), `c9d0e1f2a3b4` (`generated_assets`).
+
+**Frontend**
+
+- **Create** tab (`CreatePanel.jsx`) — Image/Video sub-tabs, prompt form, quota display, gallery
+- **Chat** model dropdown — fetches `/api/models`, sends `model` in `/chat` body (session-scoped React state)
+
+**Tests:** `backend/tests/test_multimodal.py` — model list, chat model field, 5+1 image / 2+1 video 429 limits, asset storage.
+
+**How to verify:** `cd backend && pytest tests/test_multimodal.py`; log in, open **Create**, generate an image; exhaust quota to see **Limit reached**; switch chat model to **QwQ Plus (reasoning)**.
+
+**Files touched:** `backend/app/models/user.py`, `generated_asset.py`, `services/usage.py`, `api/generate.py`, `core/dashscope_client.py`, `api/chat.py`, `services/agent_service.py`, `main.py`, Alembic migrations; `frontend/src/components/CreatePanel.jsx`, `Chat.jsx`, `App.jsx`, `index.css`; `README.md`.
+
+---
+
 ## Level 4 – Context-Aware Memory Layering
 
 **Objective:** Re-architect Memoria into distinct, hackathon-optimised memory tiers with clear naming and strict isolation rules.

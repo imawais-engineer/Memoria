@@ -43,6 +43,8 @@ export default function Chat({
 }) {
   const [messages, setMessages] = useState([])
   const [input, setInput] = useState('')
+  const [selectedModel, setSelectedModel] = useState('qwen-plus')
+  const [models, setModels] = useState([])
   const [sending, setSending] = useState(false)
   const [loadingHistory, setLoadingHistory] = useState(false)
   const [error, setError] = useState('')
@@ -56,6 +58,24 @@ export default function Chat({
     element.scrollTo({ top: element.scrollHeight, behavior })
     stickToBottomRef.current = true
     setShowScrollDown(false)
+  }, [])
+
+  useEffect(() => {
+    let cancelled = false
+    async function loadModels() {
+      try {
+        const res = await fetch('/api/models')
+        if (!res.ok) return
+        const data = await res.json()
+        if (!cancelled) setModels(data)
+      } catch {
+        // model list is optional on load failure
+      }
+    }
+    loadModels()
+    return () => {
+      cancelled = true
+    }
   }, [])
 
   useEffect(() => {
@@ -168,6 +188,7 @@ export default function Chat({
           message: text,
           session_id: sessionId,
           is_memoryless: isMemoryless,
+          model: selectedModel,
         }),
       })
       if (!res.ok) throw new Error(`Backend returned ${res.status}`)
@@ -298,6 +319,22 @@ export default function Chat({
       </div>
 
       <div className="composer">
+        <select
+          className="model-select"
+          value={selectedModel}
+          onChange={(e) => setSelectedModel(e.target.value)}
+          disabled={sending}
+          aria-label="Chat model"
+          title="Chat model"
+        >
+          {(models.length ? models : [{ id: 'qwen-plus', name: 'Qwen Plus (balanced)' }]).map(
+            (model) => (
+              <option key={model.id} value={model.id}>
+                {model.name}
+              </option>
+            ),
+          )}
+        </select>
         <input
           value={input}
           onChange={(e) => setInput(e.target.value)}

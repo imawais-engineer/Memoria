@@ -26,6 +26,8 @@
 - **Structured output** – Qwen structured JSON responses power consolidation, reflection, and conflict resolution with schema fallbacks.
 - **Benchmark‑proven 77.6% improvement** – 12‑scenario evaluation shows memory‑augmented replies score **77.6% higher** on average (see [Benchmark](#benchmark) below).
 - **Markdown + LaTeX chat rendering** – assistant replies render rich Markdown and KaTeX math (`$...$`, `$$...$$`) in the dashboard.
+- **Multimodal generation** – create images (`wan2.1-t2i-plus`) and videos (`wan2.1-t2v-turbo`) from the **Create** tab with per-user quotas (default 5 images / 2 videos).
+- **Chat model switcher** – choose among `qwen-plus`, `qwen-max`, `qwq-plus`, and `qwen-turbo` per session via `GET /api/models` and the chat composer dropdown.
 - **Deployment on Azure + Alibaba Cloud Terraform proof** – live instance on Azure; full stack IaC for Alibaba Cloud in [`infrastructure/acs_deployment.tf`](infrastructure/acs_deployment.tf).
 
 ---
@@ -71,7 +73,7 @@ Then start the dashboard:
 cd frontend && npm install && npm run dev   # http://localhost:5173
 ```
 
-Open **http://localhost:5173** — you'll see the Memoria public landing page (hero, features, benchmarks, and embedded auth). Click **Get Started Free** or scroll to **Start Building Your Personal Memory** to sign up or log in (username + favorite book). The chat UI uses lazy session creation: new chats appear in the sidebar only after you send the first message. Use the sidebar for **Personal Intelligence**, **New Chat**, and **Memoryless** private sessions.
+Open **http://localhost:5173** — you'll see the Memoria public landing page (hero, features, benchmarks, and embedded auth). Click **Get Started Free** or scroll to **Start Building Your Personal Memory** to sign up or log in (username + favorite book). The chat UI uses lazy session creation: new chats appear in the sidebar only after you send the first message. Use the sidebar for **Personal Intelligence**, **New Chat**, and **Memoryless** private sessions. The **Create** tab generates images and videos (quota-limited); the chat composer includes a **model switcher** (`qwen-plus`, `qwen-max`, `qwq-plus`, `qwen-turbo`).
 
 ### 2b. Run locally (without Docker)
 

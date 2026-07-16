@@ -100,6 +100,21 @@ These features enhance usability, personalization, and privacy while staying tru
 
 ---
 
+## 5. Multimodal Generation & Model Switcher (Implemented)
+
+**Description:**
+- **Create tab** — generate images (`wan2.1-t2i-plus`) and videos (`wan2.1-t2v-turbo`) from prompts.
+- Per-user quotas: default **5 images** and **2 videos** (stored on `users` table).
+- Gallery of past generations via `GET /api/generate/assets`.
+- **Chat model switcher** — pick `qwen-plus`, `qwen-max`, `qwq-plus`, or `qwen-turbo` per session.
+
+**Why it helps:**
+- Showcases full Qwen Cloud / DashScope stack beyond text chat.
+- Quota limits keep demo costs predictable for judges.
+- Model switcher demonstrates flexibility without breaking memory features.
+
+---
+
 ## Next Steps
 
 1. Implement **Feature 1 (Onboarding/Login)** first.
