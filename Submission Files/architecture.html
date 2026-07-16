@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>Memoria System Architecture</title>
+<style>
+  :root {
+    --ink: #0f172a;
+    --muted: #475569;
+    --line: #64748b;
+    --fe: #dbeafe; --fe-b: #1d4ed8; --fe-t: #1e3a8a;
+    --be: #ffedd5; --be-b: #c2410c; --be-t: #7c2d12;
+    --ai: #f3e8ff; --ai-b: #7e22ce; --ai-t: #581c87;
+    --db: #dcfce7; --db-b: #15803d; --db-t: #14532d;
+    --bg: #f8fafc;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: "Segoe UI", Inter, system-ui, sans-serif;
+    background: var(--bg);
+    color: var(--ink);
+    width: 1600px;
+    padding: 36px 40px 48px;
+  }
+  header {
+    text-align: center;
+    margin-bottom: 28px;
+  }
+  header h1 {
+    font-size: 34px;
+    letter-spacing: -0.02em;
+    margin-bottom: 6px;
+  }
+  header p {
+    color: var(--muted);
+    font-size: 16px;
+  }
+  .legend {
+    display: flex;
+    justify-content: center;
+    gap: 22px;
+    margin: 18px 0 28px;
+    font-size: 13px;
+    font-weight: 600;
+  }
+  .legend span {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .swatch {
+    width: 18px; height: 18px; border-radius: 4px;
+    border: 2px solid;
+  }
+  .swatch.fe { background: var(--fe); border-color: var(--fe-b); }
+  .swatch.be { background: var(--be); border-color: var(--be-b); }
+  .swatch.ai { background: var(--ai); border-color: var(--ai-b); }
+  .swatch.db { background: var(--db); border-color: var(--db-b); }
+
+  .layer {
+    border: 2px solid;
+    border-radius: 16px;
+    padding: 18px 20px 20px;
+    margin: 0 auto;
+    position: relative;
+    background: #fff;
+  }
+  .layer h2 {
+    font-size: 15px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    margin-bottom: 14px;
+  }
+  .cards {
+    display: flex;
+    gap: 14px;
+    justify-content: center;
+    flex-wrap: wrap;
+  }
+  .card {
+    border: 2px solid;
+    border-radius: 12px;
+    padding: 14px 16px;
+    min-width: 200px;
+    max-width: 280px;
+    flex: 1;
+  }
+  .card strong {
+    display: block;
+    font-size: 15px;
+    margin-bottom: 6px;
+  }
+  .card p {
+    font-size: 13px;
+    line-height: 1.35;
+    color: var(--muted);
+  }
+
+  .fe { border-color: var(--fe-b); }
+  .fe h2, .card.fe strong { color: var(--fe-t); }
+  .card.fe { background: var(--fe); border-color: var(--fe-b); }
+
+  .be { border-color: var(--be-b); }
+  .be h2, .card.be strong { color: var(--be-t); }
+  .card.be { background: var(--be); border-color: var(--be-b); }
+
+  .ai { border-color: var(--ai-b); }
+  .ai h2, .card.ai strong { color: var(--ai-t); }
+  .card.ai { background: var(--ai); border-color: var(--ai-b); }
+
+  .db { border-color: var(--db-b); }
+  .db h2, .card.db strong { color: var(--db-t); }
+  .card.db { background: var(--db); border-color: var(--db-b); }
+
+  .arrow {
+    text-align: center;
+    padding: 10px 0;
+    color: var(--line);
+    font-size: 13px;
+    font-weight: 600;
+  }
+  .arrow .shaft {
+    font-size: 28px;
+    line-height: 1;
+    color: var(--ink);
+  }
+  .split {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 24px;
+    margin-top: 0;
+  }
+  .flow-note {
+    margin-top: 28px;
+    border: 1px solid #cbd5e1;
+    border-radius: 12px;
+    background: #fff;
+    padding: 16px 20px;
+  }
+  .flow-note h3 {
+    font-size: 15px;
+    margin-bottom: 10px;
+  }
+  .flow-note ol {
+    margin-left: 20px;
+    color: var(--muted);
+    font-size: 14px;
+    line-height: 1.55;
+  }
+  .flow-note li strong { color: var(--ink); }
+  .chip {
+    display: inline-block;
+    background: #e2e8f0;
+    border-radius: 999px;
+    padding: 2px 10px;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--ink);
+    margin-right: 6px;
+  }
+</style>
+</head>
+<body>
+  <header>
+    <h1>Memoria — System Architecture</h1>
+    <p>Qwen Cloud Hackathon · Track 1 – MemoryAgent · How Frontend, Backend, Qwen Cloud, and Databases connect</p>
+  </header>
+
+  <div class="legend">
+    <span><i class="swatch fe"></i> Frontend</span>
+    <span><i class="swatch be"></i> Backend</span>
+    <span><i class="swatch ai"></i> Qwen Cloud</span>
+    <span><i class="swatch db"></i> Database &amp; Cache</span>
+  </div>
+
+  <!-- Layer 1: Frontend -->
+  <section class="layer fe">
+    <h2>1 · Frontend</h2>
+    <div class="cards">
+      <div class="card fe">
+        <strong>React + Vite Dashboard</strong>
+        <p>Chat, Memory tab, Persona, Auth. Markdown + LaTeX rendering. Live UI on port 5173.</p>
+      </div>
+      <div class="card fe">
+        <strong>External Agents MCP</strong>
+        <p>Third-party Qwen agents discover and call Memoria memory skills over HTTP.</p>
+      </div>
+    </div>
+  </section>
+
+  <div class="arrow">
+    <div class="shaft">↓</div>
+    <span class="chip">POST /chat</span>
+    <span class="chip">GET /mcp/memory-skills</span>
+    reply ↑
+  </div>
+
+  <!-- Layer 2: Backend -->
+  <section class="layer be">
+    <h2>2 · Backend — FastAPI :8000 + Celery</h2>
+    <div class="cards">
+      <div class="card be">
+        <strong>API Layer</strong>
+        <p>/chat · /auth · /api/memories · /api/feedback · /mcp/memory-skills</p>
+      </div>
+      <div class="card be">
+        <strong>Agent Service</strong>
+        <p>Loads session + personal memory, builds prompt with PI / MemoryLess modes, calls Qwen.</p>
+      </div>
+      <div class="card be">
+        <strong>Celery Workers</strong>
+        <p>Ingestion extract · daily decay · weekly consolidation. Never blocks the chat path.</p>
+      </div>
+      <div class="card be">
+        <strong>MCP Memory Skills</strong>
+        <p>get_core_memories · get_user_preferences · forget_memory · strengthen_memory</p>
+      </div>
+    </div>
+  </section>
+
+  <div class="arrow">
+    <div class="shaft">↓ &nbsp;&nbsp;&nbsp; ↓</div>
+    Backend talks to <strong>Qwen Cloud</strong> and <strong>Databases</strong> in parallel
+  </div>
+
+  <!-- Layer 3: Qwen + DB side by side -->
+  <div class="split">
+    <section class="layer ai">
+      <h2>3 · Qwen Cloud DashScope</h2>
+      <div class="cards">
+        <div class="card ai">
+          <strong>Qwen-Plus</strong>
+          <p>Chat replies · function-call memory extraction · conflict detection · reflection JSON</p>
+        </div>
+        <div class="card ai">
+          <strong>Qwen-Max</strong>
+          <p>Weekly consolidation — clusters similar memories into structured summaries</p>
+        </div>
+        <div class="card ai">
+          <strong>text-embedding-v3</strong>
+          <p>1024-dim embeddings for queries and stored personal memories</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="layer db">
+      <h2>4 · Database &amp; Cache</h2>
+      <div class="cards">
+        <div class="card db">
+          <strong>Redis</strong>
+          <p>Session Memory (last 10 msgs) + Celery broker / result backend</p>
+        </div>
+        <div class="card db">
+          <strong>PostgreSQL 16 + pgvector</strong>
+          <p>Personal Memory store — hybrid search: similarity × importance × recency</p>
+        </div>
+        <div class="card db">
+          <strong>Context Archive</strong>
+          <p>Full chat_messages transcripts for on-demand search (non-MemoryLess)</p>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <div class="flow-note">
+    <h3>Primary data flow — how Qwen Cloud connects to backend, database, and frontend</h3>
+    <ol>
+      <li><strong>Frontend → Backend:</strong> User message via <code>POST /chat</code> from the React dashboard.</li>
+      <li><strong>Backend → Database:</strong> Agent reads Session Memory from Redis and retrieves Personal Memories from PostgreSQL + pgvector.</li>
+      <li><strong>Backend → Qwen Cloud:</strong> Agent sends packed context + message to <strong>Qwen-Plus</strong>; embeds the query with <strong>text-embedding-v3</strong>.</li>
+      <li><strong>Qwen Cloud → Backend → Frontend:</strong> Personalized reply returns through FastAPI and renders in chat (Markdown / LaTeX).</li>
+      <li><strong>Backend → Celery → Qwen → Database:</strong> Async workers call Qwen-Plus / Qwen-Max to extract, consolidate, and write memories back to PostgreSQL.</li>
+    </ol>
+  </div>
+</body>
+</html>
