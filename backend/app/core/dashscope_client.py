@@ -37,10 +37,15 @@ CHAT_MODELS = [
 ALLOWED_CHAT_MODELS = {item["id"] for item in CHAT_MODELS}
 DEFAULT_CHAT_MODEL = "qwen-plus"
 
-# Multimodal generation models (DashScope console IDs).
+# Multimodal generation models (DashScope / Qwen Cloud console IDs).
 IMAGE_MODEL = "wan2.1-t2i-plus"
 VIDEO_MODEL = "wan2.1-t2v-turbo"
-TTS_MODEL = "sambert-zhichu-v1"
+TTS_MODEL = "qwen3-tts-flash"
+TTS_VOICE = "Cherry"
+
+# Official defaults per https://docs.qwencloud.com (no user-facing overrides).
+IMAGE_DEFAULT_SIZE = "1280*1280"
+VIDEO_DEFAULT_DURATION = 5
 
 # Default embedding model.
 DEFAULT_EMBEDDING_MODEL = "text-embedding-v3"
@@ -338,6 +343,8 @@ def _extract_image_url(response: Any) -> str:
 
     first = results[0]
     url = first.get("url") if isinstance(first, dict) else getattr(first, "url", None)
+    if not url and hasattr(first, "get"):
+        url = first.get("url")
     if not url:
         raise RuntimeError("DashScope image response missing url")
     return url
@@ -353,10 +360,10 @@ def _extract_video_url(response: Any) -> str:
 
 async def generate_image(
     prompt: str,
-    size: str = "1024x1024",
     model: str = IMAGE_MODEL,
+    size: str = IMAGE_DEFAULT_SIZE,
 ) -> str:
-    """Generate an image and return its URL."""
+    """Generate an image and return its URL (DashScope default size)."""
 
     from dashscope import ImageSynthesis
 
@@ -370,6 +377,10 @@ async def generate_image(
             size=size,
         )
         if not _dashscope_status_ok(response):
+            return response
+
+        output = getattr(response, "output", None) or {}
+        if isinstance(output, dict) and output.get("task_status") == "FAILED":
             return response
 
         try:
@@ -396,10 +407,10 @@ async def generate_image(
 
 async def generate_video(
     prompt: str,
-    duration: int = 5,
     model: str = VIDEO_MODEL,
+    duration: int = VIDEO_DEFAULT_DURATION,
 ) -> str:
-    """Generate a video and return its URL."""
+    """Generate a video and return its URL (DashScope default duration)."""
 
     from dashscope import VideoSynthesis
 
@@ -430,37 +441,37 @@ async def generate_video(
 async def synthesize_speech(
     text: str,
     model: str = TTS_MODEL,
-    audio_format: str = "wav",
+    voice: str = TTS_VOICE,
 ) -> str:
-    """Synthesize speech and return a base64 data URI suitable for ``<audio src>``."""
+    """Synthesize speech via Qwen-TTS and return an audio URL for ``<audio src>``."""
 
-    import base64
-
-    from dashscope.audio.tts import SpeechSynthesizer
+    from dashscope import MultiModalConversation
 
     get_dashscope_client()
 
     def _invoke() -> Any:
-        return SpeechSynthesizer.call(
+        return MultiModalConversation.call(
             model=model,
             text=text,
-            format=audio_format,
+            voice=voice,
         )
 
     try:
-        result = await asyncio.to_thread(_invoke)
+        response = await asyncio.to_thread(_invoke)
     except Exception:  # noqa: BLE001
-        logger.exception("DashScope SpeechSynthesizer failed (model=%s)", model)
+        logger.exception("DashScope Qwen-TTS failed (model=%s)", model)
         raise
 
-    response = result.get_response()
-    if response is not None and not _dashscope_status_ok(response):
+    if not _dashscope_status_ok(response):
         _raise_dashscope_error(response, "speech synthesis")
 
-    audio_bytes = result.get_audio_data()
-    if not audio_bytes:
-        raise RuntimeError("DashScope speech synthesis returned no audio data")
-
-    encoded = base64.b64encode(audio_bytes).decode("ascii")
-    mime = "audio/wav" if audio_format == "wav" else f"audio/{audio_format}"
-    return f"data:{mime};base64,{encoded}"
+    output = getattr(response, "output", None) or {}
+    audio = output.get("audio") if isinstance(output, dict) else None
+    url = None
+    if isinstance(audio, dict):
+        url = audio.get("url")
+    elif audio is not None:
+        url = getattr(audio, "url", None)
+    if not url:
+        raise RuntimeError("DashScope TTS response missing audio url")
+    return url

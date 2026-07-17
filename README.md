@@ -26,7 +26,7 @@
 - **Structured output** – Qwen structured JSON responses power consolidation, reflection, and conflict resolution with schema fallbacks.
 - **Benchmark‑proven 77.6% improvement** – 12‑scenario evaluation shows memory‑augmented replies score **77.6% higher** on average (see [Benchmark](#benchmark) below).
 - **Markdown + LaTeX chat rendering** – assistant replies render rich Markdown and KaTeX math (`$...$`, `$$...$$`) in the dashboard.
-- **Multimodal generation in chat** – use `/imagine`, `/gen_video`, and `/gen_voice` slash commands in chat for inline images (`wan2.1-t2i-plus`), videos (`wan2.1-t2v-turbo`), and voice overviews (Qwen summary + TTS). Image/video quotas: default 5 images / 2 videos per user; voice has no limit.
+- **Multimodal generation in chat** – use `/imagine`, `/gen_video`, and `/gen_voice` slash commands in chat for inline images (`wan2.1-t2i-plus`), videos (`wan2.1-t2v-turbo`), and voice overviews (Qwen summary + `qwen3-tts-flash`). All media uses DashScope default settings (no per-user size/duration controls). Image/video quotas: default 5 images / 2 videos per user; voice has no limit.
 - **Chat model switcher** – choose among `qwen-plus`, `qwen-max`, `qwq-plus`, and `qwen-turbo` per session via `GET /api/models` and the chat composer dropdown.
 - **Deployment on Azure + Alibaba Cloud Terraform proof** – live instance on Azure; full stack IaC for Alibaba Cloud in [`infrastructure/acs_deployment.tf`](infrastructure/acs_deployment.tf).
 

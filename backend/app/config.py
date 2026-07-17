@@ -41,7 +41,7 @@ class Settings(BaseSettings):
     # Optional DashScope endpoint override. Leave empty for the SDK default
     # (Beijing); set to the international endpoint for intl-region keys, e.g.
     # https://dashscope-intl.aliyuncs.com/api/v1
-    dashscope_base_url: str = ""
+    dashscope_base_url: str = "https://dashscope-intl.aliyuncs.com/api/v1"
     database_url: str = "postgresql+asyncpg://user:pass@localhost/memoria"
     redis_url: str = "redis://localhost:6379/0"
     secret_key: str = "supersecret"

@@ -30,13 +30,11 @@ router = APIRouter(prefix="/api", tags=["generate"])
 class GenerateImageRequest(BaseModel):
     user_id: str = Field(..., min_length=1)
     prompt: str = Field(..., min_length=1)
-    size: str = "1024x1024"
 
 
 class GenerateVideoRequest(BaseModel):
     user_id: str = Field(..., min_length=1)
     prompt: str = Field(..., min_length=1)
-    duration: int = Field(default=5, ge=1, le=10)
 
 
 class GenerateVoiceRequest(BaseModel):
@@ -99,7 +97,7 @@ async def create_image(
         raise HTTPException(status_code=429, detail="Image generation limit reached")
 
     try:
-        url = await generate_image(body.prompt, size=body.size)
+        url = await generate_image(body.prompt)
     except Exception as exc:  # noqa: BLE001
         logger.exception("Image generation failed for user_id=%s", body.user_id)
         raise HTTPException(status_code=500, detail="Image generation failed") from exc
@@ -126,7 +124,7 @@ async def create_video(
         raise HTTPException(status_code=429, detail="Video generation limit reached")
 
     try:
-        url = await generate_video(body.prompt, duration=body.duration)
+        url = await generate_video(body.prompt)
     except Exception as exc:  # noqa: BLE001
         logger.exception("Video generation failed for user_id=%s", body.user_id)
         raise HTTPException(status_code=500, detail="Video generation failed") from exc

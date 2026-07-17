@@ -656,7 +656,7 @@ Strong feature highlights, architecture overview, deployment instructions.
 
 1. Load session transcript from Redis.
 2. Qwen-Plus generates a plain-text overview (strict no-preamble prompt).
-3. `sambert-zhichu-v1` TTS → base64 WAV data URI returned with `overview_text`.
+3. `sambert-zhichu-v1` TTS → audio URL returned with `overview_text`.
 
 **Frontend routing (`react-router-dom`)**
 
