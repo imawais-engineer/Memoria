@@ -540,7 +540,7 @@ Strong feature highlights, architecture overview, deployment instructions.
 3. **Personal Intelligence in sidebar** — The PI toggle moved from the header to the sidebar (below New Chat), with a descriptive tooltip; still backed by `GET/PATCH /auth/preferences`.
 4. **New Memoryless Chat button** — Replaced the MemoryLess checkbox with a “🕶️ Memoryless” sidebar button and confirmation modal; memoryless sessions show a distinct badge in the list.
 5. **Loading & empty states** — Spinners on auth submit, persona save, chat send, and sidebar actions; Memory tab shows “No memories in this chat yet.” when the current chat has none; consistent “No chats yet” sidebar empty state.
-6. **Landing page** — `Landing.jsx` is a full public marketing page (hero, features, timeline, benchmarks, embedded auth) before login; **Get Started** smooth-scrolls to the auth card.
+6. **Landing page** — `Landing.jsx` is the public marketing dashboard at `/`; **Get Started** navigates to `/auth`.
 
 **Files touched:** `frontend/src/App.jsx`, `Auth.jsx`, `Sidebar.jsx`, `Chat.jsx`, `Landing.jsx`, `Landing.css`, `MemoryGraph.jsx`, `Persona.jsx`, `index.css`; `backend/app/api/sessions.py`, `chat.py`, `memories.py`; `backend/app/services/agent_service.py`.
 
@@ -637,6 +637,42 @@ Strong feature highlights, architecture overview, deployment instructions.
 **How to verify:** `cd backend && pytest tests/test_multimodal.py`; log in, open **Create**, generate an image; exhaust quota to see **Limit reached**; switch chat model to **QwQ Plus (reasoning)**.
 
 **Files touched:** `backend/app/models/user.py`, `generated_asset.py`, `services/usage.py`, `api/generate.py`, `core/dashscope_client.py`, `api/chat.py`, `services/agent_service.py`, `main.py`, Alembic migrations; `frontend/src/components/CreatePanel.jsx`, `Chat.jsx`, `App.jsx`, `index.css`; `README.md`.
+
+---
+
+## Level 3.10 – Unified Chat Media & Dashboard/Auth Separation
+
+**Objective:** Remove the separate **Create** tab; integrate image, video, and voice generation into chat via slash commands; separate the public landing dashboard from auth and the main app.
+
+**Chat slash commands**
+
+| Command | Action | Limit |
+|---------|--------|-------|
+| `/imagine <prompt>` | Image via `wan2.1-t2i-plus` (`POST /api/generate/image`) | 5 per user |
+| `/gen_video <prompt>` | Video via `wan2.1-t2v-turbo` (`POST /api/generate/video`) | 2 per user |
+| `/gen_voice <prompt>` | Two-step voice overview (Qwen summary + TTS) | None |
+
+**Voice flow (`POST /api/generate/voice`)**
+
+1. Load session transcript from Redis.
+2. Qwen-Plus generates a plain-text overview (strict no-preamble prompt).
+3. `sambert-zhichu-v1` TTS → base64 WAV data URI returned with `overview_text`.
+
+**Frontend routing (`react-router-dom`)**
+
+| Route | View |
+|-------|------|
+| `/` | `Landing.jsx` — public dashboard (logged-in users redirect to `/app`) |
+| `/auth` | Standalone `Auth.jsx` (login + signup) |
+| `/app` | Main shell: Chat / Memory / Persona |
+
+**Removed:** `CreatePanel.jsx`, Create tab, embedded auth on landing.
+
+**Chat UI:** Inline `<img>`, `<video>`, and `<audio>` in message bubbles; `/gen_voice` shows sequential status placeholders then overview + player.
+
+**How to verify:** `/` → **Get Started** → `/auth` → login → `/app`; `/imagine a futuristic car`; `/gen_video drone over mountains`; `/gen_voice overview of this discussion`; `pytest tests/test_multimodal.py`.
+
+**Files touched:** `backend/app/services/voice_generation.py`, `api/generate.py`, `core/dashscope_client.py`, `tests/test_multimodal.py`; `frontend/src/App.jsx`, `Chat.jsx`, `Landing.jsx`, `index.css`, `Landing.css`; `README.md`, `docs/UPGRADE_MEMORIA.md`. Removed `CreatePanel.jsx`.
 
 ---
 

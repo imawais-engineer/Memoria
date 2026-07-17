@@ -40,6 +40,7 @@ DEFAULT_CHAT_MODEL = "qwen-plus"
 # Multimodal generation models (DashScope console IDs).
 IMAGE_MODEL = "wan2.1-t2i-plus"
 VIDEO_MODEL = "wan2.1-t2v-turbo"
+TTS_MODEL = "sambert-zhichu-v1"
 
 # Default embedding model.
 DEFAULT_EMBEDDING_MODEL = "text-embedding-v3"
@@ -424,3 +425,42 @@ async def generate_video(
     if not _dashscope_status_ok(response):
         _raise_dashscope_error(response, "video synthesis")
     return _extract_video_url(response)
+
+
+async def synthesize_speech(
+    text: str,
+    model: str = TTS_MODEL,
+    audio_format: str = "wav",
+) -> str:
+    """Synthesize speech and return a base64 data URI suitable for ``<audio src>``."""
+
+    import base64
+
+    from dashscope.audio.tts import SpeechSynthesizer
+
+    get_dashscope_client()
+
+    def _invoke() -> Any:
+        return SpeechSynthesizer.call(
+            model=model,
+            text=text,
+            format=audio_format,
+        )
+
+    try:
+        result = await asyncio.to_thread(_invoke)
+    except Exception:  # noqa: BLE001
+        logger.exception("DashScope SpeechSynthesizer failed (model=%s)", model)
+        raise
+
+    response = result.get_response()
+    if response is not None and not _dashscope_status_ok(response):
+        _raise_dashscope_error(response, "speech synthesis")
+
+    audio_bytes = result.get_audio_data()
+    if not audio_bytes:
+        raise RuntimeError("DashScope speech synthesis returned no audio data")
+
+    encoded = base64.b64encode(audio_bytes).decode("ascii")
+    mime = "audio/wav" if audio_format == "wav" else f"audio/{audio_format}"
+    return f"data:{mime};base64,{encoded}"

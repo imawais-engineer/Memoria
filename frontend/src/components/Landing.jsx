@@ -1,5 +1,5 @@
+import { useNavigate } from 'react-router-dom'
 import { useEffect, useRef } from 'react'
-import Auth from './Auth'
 import './Landing.css'
 
 const GITHUB_URL = 'https://github.com/imawais-engineer/Memoria'
@@ -55,7 +55,7 @@ const STEPS = [
   {
     icon: '💬',
     title: 'Chat Naturally',
-    description: 'Talk to Memoria like any assistant — no special commands required.',
+    description: 'Talk to Memoria like any assistant — or use /imagine, /gen_video, /gen_voice in chat.',
   },
   {
     icon: '✨',
@@ -73,10 +73,6 @@ const STEPS = [
     description: 'Hybrid retrieval packs the most relevant memories into every reply, even days later.',
   },
 ]
-
-function scrollToAuth() {
-  document.getElementById('get-started')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-}
 
 function NeuralVisual() {
   return (
@@ -135,8 +131,17 @@ function useRevealOnScroll() {
   return rootRef
 }
 
-export default function Landing({ onAuth }) {
+export default function Landing({ onGetStarted }) {
+  const navigate = useNavigate()
   const pageRef = useRevealOnScroll()
+
+  function goToAuth() {
+    if (onGetStarted) {
+      onGetStarted()
+      return
+    }
+    navigate('/auth')
+  }
 
   return (
     <div className="landing-page" ref={pageRef}>
@@ -168,7 +173,7 @@ export default function Landing({ onAuth }) {
           <a href="#how-it-works">How it Works</a>
           <a href="#benchmarks">Benchmarks</a>
         </nav>
-        <button type="button" className="landing-btn landing-btn--primary landing-nav-cta" onClick={scrollToAuth}>
+        <button type="button" className="landing-btn landing-btn--primary landing-nav-cta" onClick={goToAuth}>
           Get Started
         </button>
       </header>
@@ -185,7 +190,7 @@ export default function Landing({ onAuth }) {
               doesn&apos;t, and grows with you across every session.
             </p>
             <div className="landing-hero-actions">
-              <button type="button" className="landing-btn landing-btn--primary landing-btn--lg" onClick={scrollToAuth}>
+              <button type="button" className="landing-btn landing-btn--primary landing-btn--lg" onClick={goToAuth}>
                 Get Started Free
               </button>
               <a
@@ -295,15 +300,15 @@ export default function Landing({ onAuth }) {
           </div>
         </section>
 
-        <section id="get-started" className="landing-section landing-auth-section landing-reveal">
+        <section className="landing-section landing-cta-section landing-reveal">
           <div className="landing-section-header">
             <h2 className="landing-section-title">Start Building Your Personal Memory</h2>
             <p className="landing-section-lead">
               Create a free account in seconds. Your memories persist across every session.
             </p>
-          </div>
-          <div className="landing-auth-card landing-glass-card">
-            <Auth embedded onAuth={onAuth} />
+            <button type="button" className="landing-btn landing-btn--primary landing-btn--lg" onClick={goToAuth}>
+              Get Started Free
+            </button>
           </div>
         </section>
       </main>

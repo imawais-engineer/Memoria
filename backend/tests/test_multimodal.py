@@ -158,6 +158,35 @@ async def test_two_videos_then_third_returns_429(client: AsyncClient, db_session
 
 
 @pytest.mark.asyncio
+async def test_voice_generation_returns_overview_and_audio(client: AsyncClient):
+    fake_overview = "You discussed memory tiers and LaTeX rendering."
+    fake_audio = "data:audio/wav;base64,AAAA"
+
+    with patch(
+        "app.api.generate.generate_voice_overview",
+        new=AsyncMock(
+            return_value={
+                "overview_text": fake_overview,
+                "audio_data_uri": fake_audio,
+            }
+        ),
+    ):
+        res = await client.post(
+            "/api/generate/voice",
+            json={
+                "user_id": str(uuid.uuid4()),
+                "session_id": str(uuid.uuid4()),
+                "prompt": "create an overview of this discussion",
+            },
+        )
+
+    assert res.status_code == 200
+    payload = res.json()
+    assert payload["overview_text"] == fake_overview
+    assert payload["audio_data_uri"] == fake_audio
+
+
+@pytest.mark.asyncio
 async def test_image_generation_increments_and_stores_asset(
     client: AsyncClient,
     db_session_factory,

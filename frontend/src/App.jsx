@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
-import CreatePanel from './components/CreatePanel.jsx'
+import { BrowserRouter, Navigate, Route, Routes, useNavigate } from 'react-router-dom'
+import Auth from './components/Auth.jsx'
 import Chat from './components/Chat.jsx'
 import Landing from './components/Landing.jsx'
 import MemoryGraph from './components/MemoryGraph.jsx'
@@ -43,9 +44,32 @@ function loadStoredAuth() {
   return null
 }
 
-export default function App() {
+function LandingRoute() {
+  const navigate = useNavigate()
+  const auth = loadStoredAuth()
+  if (auth) return <Navigate to="/app" replace />
+  return <Landing onGetStarted={() => navigate('/auth')} />
+}
+
+function AuthRoute({ onAuth }) {
+  const navigate = useNavigate()
+  const auth = loadStoredAuth()
+  if (auth) return <Navigate to="/app" replace />
+
+  return (
+    <div className="auth-page">
+      <Auth
+        onAuth={(user) => {
+          onAuth(user)
+          navigate('/app', { replace: true })
+        }}
+      />
+    </div>
+  )
+}
+
+function MainApp({ auth, onAuth, onLogout }) {
   const [tab, setTab] = useState('chat')
-  const [auth, setAuth] = useState(loadStoredAuth)
   const [sessions, setSessions] = useState([])
   const [activeSessionId, setActiveSessionId] = useState(null)
   const [pendingSession, setPendingSession] = useState(null)
@@ -56,7 +80,6 @@ export default function App() {
   const [persona, setPersona] = useState(null)
   const [prefsSaving, setPrefsSaving] = useState(false)
 
-  const isLoggedIn = Boolean(auth?.user_id)
   const userId = auth?.user_id
   const activeSession = sessions.find((session) => session.session_id === activeSessionId)
   const isPendingSession = Boolean(
@@ -66,54 +89,31 @@ export default function App() {
     ? pendingSession.isMemoryless
     : Boolean(activeSession?.is_memoryless)
 
-  const handleAuth = useCallback((user) => {
-    localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(user))
-    setAuth(user)
-    setGlobalMemoryEnabled(user.global_memory_enabled ?? true)
-    setPersona(user.persona ?? null)
-  }, [])
-
-  const handleLogout = useCallback(() => {
-    localStorage.removeItem(AUTH_STORAGE_KEY)
-    setAuth(null)
-    setSessions([])
-    setActiveSessionId(null)
-    setPendingSession(null)
-    setGlobalMemoryEnabled(true)
-    setPersona(null)
-    setTab('chat')
-  }, [])
-
   const fetchPreferences = useCallback(async () => {
-    if (!isLoggedIn) return
+    if (!userId) return
     try {
       const res = await fetch(
-        `/auth/preferences?user_id=${encodeURIComponent(auth.user_id)}`,
+        `/auth/preferences?user_id=${encodeURIComponent(userId)}`,
       )
       if (!res.ok) return
       const data = await res.json()
       setGlobalMemoryEnabled(data.global_memory_enabled)
       setPersona(data.persona ?? null)
-      setAuth((current) => {
-        const next = {
-          ...current,
-          global_memory_enabled: data.global_memory_enabled,
-          persona: data.persona,
-        }
-        localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(next))
-        return next
+      onAuth({
+        user_id: userId,
+        username: auth.username,
+        global_memory_enabled: data.global_memory_enabled,
+        persona: data.persona,
       })
     } catch {
       // preferences are optional on load failure
     }
-  }, [isLoggedIn, auth?.user_id])
+  }, [userId, auth.username, onAuth])
 
   useEffect(() => {
-    if (isLoggedIn) {
-      setGlobalMemoryEnabled(auth.global_memory_enabled ?? true)
-      fetchPreferences()
-    }
-  }, [isLoggedIn, auth?.user_id, auth?.global_memory_enabled, fetchPreferences])
+    setGlobalMemoryEnabled(auth.global_memory_enabled ?? true)
+    fetchPreferences()
+  }, [userId, auth.global_memory_enabled, fetchPreferences])
 
   const loadSessions = useCallback(async () => {
     if (!userId) return []
@@ -175,7 +175,7 @@ export default function App() {
   }, [userId])
 
   useEffect(() => {
-    if (!isLoggedIn || !userId) return
+    if (!userId) return
 
     let cancelled = false
 
@@ -214,7 +214,7 @@ export default function App() {
     return () => {
       cancelled = true
     }
-  }, [userId, isLoggedIn, loadSessions, cleanupMemorylessSessions])
+  }, [userId, loadSessions, cleanupMemorylessSessions])
 
   const handleSelectSession = useCallback(
     async (sessionId) => {
@@ -338,18 +338,14 @@ export default function App() {
 
   const handlePersonaSaved = useCallback((data) => {
     setPersona(data.persona ?? null)
-    setAuth((current) => {
-      const updated = {
-        ...current,
-        persona: data.persona,
-      }
-      localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(updated))
-      return updated
+    onAuth({
+      ...auth,
+      persona: data.persona,
     })
-  }, [])
+  }, [auth, onAuth])
 
   const handleGlobalMemoryToggle = useCallback(async () => {
-    if (!isLoggedIn || prefsSaving) return
+    if (prefsSaving) return
     const nextValue = !globalMemoryEnabled
     setPrefsSaving(true)
     setSessionsError('')
@@ -365,20 +361,16 @@ export default function App() {
       if (!res.ok) throw new Error(`Failed to update preference (${res.status})`)
       const data = await res.json()
       setGlobalMemoryEnabled(data.global_memory_enabled)
-      setAuth((current) => {
-        const updated = {
-          ...current,
-          global_memory_enabled: data.global_memory_enabled,
-        }
-        localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(updated))
-        return updated
+      onAuth({
+        ...auth,
+        global_memory_enabled: data.global_memory_enabled,
       })
     } catch (e) {
       setSessionsError(e.message || 'Failed to update Personal Intelligence setting')
     } finally {
       setPrefsSaving(false)
     }
-  }, [auth?.user_id, globalMemoryEnabled, isLoggedIn, prefsSaving])
+  }, [auth, globalMemoryEnabled, onAuth, prefsSaving])
 
   useEffect(() => {
     if (!activeSession?.is_memoryless || !activeSessionId || isPendingSession) {
@@ -394,10 +386,6 @@ export default function App() {
     return () => window.removeEventListener('beforeunload', cleanupOnUnload)
   }, [activeSession?.is_memoryless, activeSessionId, isPendingSession, userId])
 
-  if (!isLoggedIn) {
-    return <Landing onAuth={handleAuth} />
-  }
-
   return (
     <div className="app-shell">
       <div className="app">
@@ -409,7 +397,7 @@ export default function App() {
           </div>
           <div className="header-actions">
             <span className="user-greeting">@{auth.username}</span>
-            <button type="button" className="logout-btn" onClick={handleLogout}>
+            <button type="button" className="logout-btn" onClick={onLogout}>
               Logout
             </button>
           </div>
@@ -451,12 +439,6 @@ export default function App() {
               >
                 Persona
               </button>
-              <button
-                className={`tab ${tab === 'create' ? 'active' : ''}`}
-                onClick={() => setTab('create')}
-              >
-                Create
-              </button>
             </div>
 
             {tab === 'chat' ? (
@@ -473,8 +455,6 @@ export default function App() {
                 username={auth?.username}
                 sessionId={activeSessionId}
               />
-            ) : tab === 'create' ? (
-              <CreatePanel userId={userId} />
             ) : (
               <Persona
                 userId={auth.user_id}
@@ -487,5 +467,55 @@ export default function App() {
         </div>
       </div>
     </div>
+  )
+}
+
+function AppRoute({ auth, onAuth, onLogout }) {
+  const navigate = useNavigate()
+  if (!auth?.user_id) return <Navigate to="/auth" replace />
+
+  function handleLogout() {
+    onLogout()
+    navigate('/', { replace: true })
+  }
+
+  return <MainApp auth={auth} onAuth={onAuth} onLogout={handleLogout} />
+}
+
+export default function App() {
+  const [auth, setAuth] = useState(loadStoredAuth)
+
+  const handleAuth = useCallback((user) => {
+    setAuth((current) => {
+      if (
+        current?.user_id === user.user_id &&
+        current?.username === user.username &&
+        current?.global_memory_enabled === user.global_memory_enabled &&
+        JSON.stringify(current?.persona) === JSON.stringify(user.persona)
+      ) {
+        return current
+      }
+      localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(user))
+      return user
+    })
+  }, [])
+
+  const handleLogout = useCallback(() => {
+    localStorage.removeItem(AUTH_STORAGE_KEY)
+    setAuth(null)
+  }, [])
+
+  return (
+    <BrowserRouter>
+      <Routes>
+        <Route path="/" element={<LandingRoute />} />
+        <Route path="/auth" element={<AuthRoute onAuth={handleAuth} />} />
+        <Route
+          path="/app"
+          element={<AppRoute auth={auth} onAuth={handleAuth} onLogout={handleLogout} />}
+        />
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
+    </BrowserRouter>
   )
 }

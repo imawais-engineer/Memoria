@@ -7,17 +7,39 @@ import 'katex/dist/katex.min.css'
 
 const SCROLL_THRESHOLD_PX = 50
 
+const VOICE_STATUS_MESSAGES = [
+  '🔄 Running voice generation…',
+  '🔍 Analyzing session context…',
+  '📝 Creating text overview…',
+  '🎙️ Synthesizing voice…',
+]
+
+const MEDIA_COMMANDS = [
+  { prefix: '/imagine', type: 'image', endpoint: '/api/generate/image' },
+  { prefix: '/gen_video', type: 'video', endpoint: '/api/generate/video' },
+  { prefix: '/gen_voice', type: 'voice', endpoint: '/api/generate/voice' },
+]
+
+function parseMediaCommand(text) {
+  const trimmed = text.trim()
+  for (const command of MEDIA_COMMANDS) {
+    if (trimmed.startsWith(command.prefix)) {
+      const prompt = trimmed.slice(command.prefix.length).trim()
+      if (!prompt) return null
+      return { ...command, prompt }
+    }
+  }
+  return null
+}
+
 function normalizeAssistantMarkdown(content) {
   let text = content
     .replace(/<br\s*\/?>/gi, '\n')
     .replace(/&lt;br\s*\/?&gt;/gi, '\n')
     .replace(/,([dxyzdtuv])/g, ' \\,$1')
 
-  // Qwen often uses LaTeX \( \) and \[ \] delimiters — convert for remark-math.
   text = text.replace(/\\\[([\s\S]+?)\\\]/g, (_, expr) => `$$\n${expr.trim()}\n$$`)
   text = text.replace(/\\\(([\s\S]+?)\\\)/g, (_, expr) => `$${expr.trim()}$`)
-
-  // Qwen often wraps dollar math with spaces: "$ f(x) $" — remark-math needs tight delimiters.
   text = text.replace(/\$\$\s*([\s\S]+?)\s*\$\$/g, (_, expr) => `$$\n${expr.trim()}\n$$`)
   text = text.replace(
     /(^|[^$])\$\s+([^\n$]+?)\s+\$(?!\$)/g,
@@ -32,6 +54,63 @@ function isNearBottom(element) {
     element.scrollHeight - element.scrollTop - element.clientHeight <=
     SCROLL_THRESHOLD_PX
   )
+}
+
+function MessageBody({ message }) {
+  if (message.kind === 'image' && message.mediaUrl) {
+    return (
+      <div className="chat-media-block">
+        <img src={message.mediaUrl} alt={message.prompt || 'Generated image'} className="chat-media" />
+      </div>
+    )
+  }
+
+  if (message.kind === 'video' && message.mediaUrl) {
+    return (
+      <div className="chat-media-block">
+        <video src={message.mediaUrl} controls className="chat-media" />
+      </div>
+    )
+  }
+
+  if (message.kind === 'voice') {
+    return (
+      <div className="chat-voice-block">
+        <div className="chat-voice-overview">{message.voiceOverview}</div>
+        {message.audioSrc && <audio controls src={message.audioSrc} className="chat-audio" />}
+      </div>
+    )
+  }
+
+  if (message.role === 'assistant') {
+    return (
+      <div className="markdown-content">
+        <ReactMarkdown
+          remarkPlugins={[
+            remarkGfm,
+            [
+              remarkMath,
+              {
+                inlineMath: [
+                  ['$', '$'],
+                  ['\\(', '\\)'],
+                ],
+                displayMath: [
+                  ['$$', '$$'],
+                  ['\\[', '\\]'],
+                ],
+              },
+            ],
+          ]}
+          rehypePlugins={[rehypeKatex]}
+        >
+          {normalizeAssistantMarkdown(message.content)}
+        </ReactMarkdown>
+      </div>
+    )
+  }
+
+  return message.content
 }
 
 export default function Chat({
@@ -117,6 +196,7 @@ export default function Chat({
             data.map((item) => ({
               role: item.role,
               content: item.content,
+              kind: 'text',
               memory_ids: [],
               feedback: null,
             })),
@@ -170,14 +250,92 @@ export default function Chat({
     }
   }
 
-  async function send() {
-    const text = input.trim()
-    if (!text || sending || !sessionId) return
-    setError('')
-    setInput('')
-    stickToBottomRef.current = true
-    setShowScrollDown(false)
-    setMessages((m) => [...m, { role: 'user', content: text }])
+  async function sendMediaCommand(command) {
+    const { type, prompt, endpoint } = command
+    setMessages((current) => [...current, { role: 'user', content: `${command.prefix} ${prompt}`, kind: 'text' }])
+
+    if (type === 'voice') {
+      const statusMessages = VOICE_STATUS_MESSAGES.map((content) => ({
+        role: 'assistant',
+        content,
+        kind: 'voice-status',
+      }))
+      setMessages((current) => [...current, ...statusMessages])
+
+      try {
+        const res = await fetch(endpoint, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            user_id: userId,
+            session_id: sessionId,
+            prompt,
+          }),
+        })
+
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}))
+          throw new Error(data.detail || `Voice generation failed (${res.status})`)
+        }
+
+        const data = await res.json()
+        setMessages((current) => {
+          const withoutStatus = current.filter((item) => item.kind !== 'voice-status')
+          return [
+            ...withoutStatus,
+            {
+              role: 'assistant',
+              content: '',
+              kind: 'voice',
+              voiceOverview: data.overview_text,
+              audioSrc: data.audio_data_uri,
+            },
+          ]
+        })
+      } catch (e) {
+        setMessages((current) => current.filter((item) => item.kind !== 'voice-status'))
+        setError(e.message || 'Voice generation failed')
+      }
+      return
+    }
+
+    setSending(true)
+    try {
+      const res = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ user_id: userId, prompt }),
+      })
+
+      if (res.status === 429) {
+        setError(type === 'image' ? 'Image generation limit reached (5 max).' : 'Video generation limit reached (2 max).')
+        return
+      }
+
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}))
+        throw new Error(data.detail || `Generation failed (${res.status})`)
+      }
+
+      const data = await res.json()
+      setMessages((current) => [
+        ...current,
+        {
+          role: 'assistant',
+          content: '',
+          kind: type,
+          mediaUrl: data.url,
+          prompt,
+        },
+      ])
+    } catch (e) {
+      setError(e.message || 'Generation failed')
+    } finally {
+      setSending(false)
+    }
+  }
+
+  async function sendChatMessage(text) {
     setSending(true)
     try {
       const res = await fetch('/chat', {
@@ -198,6 +356,7 @@ export default function Chat({
         {
           role: 'assistant',
           content: data.reply,
+          kind: 'text',
           memory_ids: data.memory_ids || [],
           feedback: null,
         },
@@ -210,6 +369,29 @@ export default function Chat({
     } finally {
       setSending(false)
     }
+  }
+
+  async function send() {
+    const text = input.trim()
+    if (!text || sending || !sessionId) return
+    setError('')
+    setInput('')
+    stickToBottomRef.current = true
+    setShowScrollDown(false)
+
+    const mediaCommand = parseMediaCommand(text)
+    if (mediaCommand) {
+      setSending(true)
+      try {
+        await sendMediaCommand(mediaCommand)
+      } finally {
+        setSending(false)
+      }
+      return
+    }
+
+    setMessages((m) => [...m, { role: 'user', content: text, kind: 'text' }])
+    await sendChatMessage(text)
   }
 
   function onKeyDown(e) {
@@ -226,6 +408,9 @@ export default function Chat({
           MemoryLess Session – nothing will be remembered.
         </div>
       )}
+      <div className="chat-hints">
+        Try <code>/imagine</code>, <code>/gen_video</code>, or <code>/gen_voice</code> followed by a prompt.
+      </div>
       <div className="chat-window-wrap">
         <div className="chat-window" ref={windowRef}>
           {loadingHistory && (
@@ -243,34 +428,8 @@ export default function Chat({
                 key={i}
                 className={`bubble-row ${m.role === 'user' ? 'user-row' : 'assistant-row'}`}
               >
-                <div className={`bubble ${m.role}`}>
-                  {m.role === 'assistant' ? (
-                    <div className="markdown-content">
-                      <ReactMarkdown
-                        remarkPlugins={[
-                          remarkGfm,
-                          [
-                            remarkMath,
-                            {
-                              inlineMath: [
-                                ['$', '$'],
-                                ['\\(', '\\)'],
-                              ],
-                              displayMath: [
-                                ['$$', '$$'],
-                                ['\\[', '\\]'],
-                              ],
-                            },
-                          ],
-                        ]}
-                        rehypePlugins={[rehypeKatex]}
-                      >
-                        {normalizeAssistantMarkdown(m.content)}
-                      </ReactMarkdown>
-                    </div>
-                  ) : (
-                    m.content
-                  )}
+                <div className={`bubble ${m.role}${m.kind === 'voice' ? ' voice-bubble' : ''}`}>
+                  <MessageBody message={m} />
                 </div>
                 {m.role === 'assistant' && m.memory_ids?.length > 0 && (
                   <div className="feedback-buttons">
@@ -298,7 +457,7 @@ export default function Chat({
                 )}
               </div>
             ))}
-          {sending && (
+          {sending && !messages.some((m) => m.kind === 'voice-status') && (
             <div className="bubble assistant typing">
               <span className="spinner spinner-inline" aria-hidden="true" />
               Thinking…
@@ -339,7 +498,7 @@ export default function Chat({
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={onKeyDown}
-          placeholder="Type a message…"
+          placeholder="Type a message or /imagine, /gen_video, /gen_voice…"
           disabled={sending || !sessionId}
         />
         <button className="btn" onClick={send} disabled={sending || !input.trim() || !sessionId}>

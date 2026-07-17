@@ -579,7 +579,16 @@
   border: 1px solid rgba(139, 92, 246, 0.15);
 }
 
-/* Auth section */
+.landing-cta-section {
+  padding-bottom: 96px;
+  text-align: center;
+}
+
+.landing-cta-section .landing-btn {
+  margin-top: 20px;
+}
+
+/* Auth section (legacy — auth now at /auth) */
 .landing-auth-section {
   padding-bottom: 96px;
 }

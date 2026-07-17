@@ -1,10 +1,11 @@
-"""Multimodal generation API: image, video, assets gallery, chat models."""
+"""Multimodal generation API: image, video, voice, chat models."""
 
 from __future__ import annotations
 
 import logging
 from uuid import UUID
 
+import redis.asyncio as redis
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 from sqlalchemy import select
@@ -16,8 +17,10 @@ from app.core.dashscope_client import (
     generate_video,
 )
 from app.core.database import get_db
+from app.core.redis_client import get_redis
 from app.models.generated_asset import GeneratedAsset
 from app.services.usage import check_and_increment_usage, get_usage_summary
+from app.services.voice_generation import generate_voice_overview
 
 logger = logging.getLogger(__name__)
 
@@ -36,8 +39,19 @@ class GenerateVideoRequest(BaseModel):
     duration: int = Field(default=5, ge=1, le=10)
 
 
+class GenerateVoiceRequest(BaseModel):
+    user_id: str = Field(..., min_length=1)
+    session_id: str = Field(..., min_length=1)
+    prompt: str = Field(..., min_length=1)
+
+
 class GenerateUrlResponse(BaseModel):
     url: str
+
+
+class GenerateVoiceResponse(BaseModel):
+    overview_text: str
+    audio_data_uri: str
 
 
 class GeneratedAssetOut(BaseModel):
@@ -127,6 +141,26 @@ async def create_video(
     await db.commit()
 
     return GenerateUrlResponse(url=url)
+
+
+@router.post("/generate/voice", response_model=GenerateVoiceResponse)
+async def create_voice(
+    body: GenerateVoiceRequest,
+    redis_client: redis.Redis = Depends(get_redis),
+) -> GenerateVoiceResponse:
+    """Two-step voice overview: Qwen summary of session context, then TTS."""
+
+    try:
+        result = await generate_voice_overview(
+            user_prompt=body.prompt,
+            session_id=body.session_id,
+            redis_client=redis_client,
+        )
+    except Exception as exc:  # noqa: BLE001
+        logger.exception("Voice generation failed for user_id=%s", body.user_id)
+        raise HTTPException(status_code=500, detail="Voice generation failed") from exc
+
+    return GenerateVoiceResponse(**result)
 
 
 @router.get("/generate/assets", response_model=AssetsListResponse)
