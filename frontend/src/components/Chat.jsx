@@ -252,6 +252,7 @@ export default function Chat({
   isPendingSession = false,
   isMemoryless = false,
   onSessionCreated,
+  onSessionTitleUpdate,
 }) {
   const [messages, setMessages] = useState([])
   const [input, setInput] = useState('')
@@ -429,6 +430,16 @@ export default function Chat({
     }
   }
 
+  function applySessionResponse(data) {
+    const resolvedId = data.session_id || sessionId
+    if (data.title && resolvedId) {
+      onSessionTitleUpdate?.(resolvedId, data.title)
+    }
+    if (isPendingSession && resolvedId) {
+      onSessionCreated?.(resolvedId, { isMemoryless, title: data.title })
+    }
+  }
+
   async function sendMediaCommand(command) {
     const { type, prompt, endpoint } = command
     setMessages((current) => [
@@ -452,6 +463,7 @@ export default function Chat({
             user_id: userId,
             session_id: sessionId,
             prompt,
+            is_memoryless: isMemoryless,
           }),
         })
 
@@ -461,6 +473,7 @@ export default function Chat({
         }
 
         const data = await res.json()
+        applySessionResponse(data)
         setMessages((current) => {
           const withoutStatus = current.filter((item) => item.kind !== 'voice-status')
           return [
@@ -485,7 +498,12 @@ export default function Chat({
       const res = await fetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ user_id: userId, prompt }),
+        body: JSON.stringify({
+          user_id: userId,
+          session_id: sessionId,
+          prompt,
+          is_memoryless: isMemoryless,
+        }),
       })
 
       if (res.status === 429) {
@@ -503,6 +521,7 @@ export default function Chat({
       }
 
       const data = await res.json()
+      applySessionResponse(data)
       setMessages((current) => [
         ...current,
         {
@@ -543,9 +562,7 @@ export default function Chat({
           feedback: null,
         },
       ])
-      if (isPendingSession) {
-        onSessionCreated?.(data.session_id, { isMemoryless })
-      }
+      applySessionResponse(data)
     } catch (e) {
       setError(e.message || 'Failed to send message')
     }
@@ -644,43 +661,46 @@ export default function Chat({
             messages.map((m, i) => {
               const copyText = getMessageCopyText(m)
               const showCopy =
+                m.role === 'assistant' &&
                 m.kind !== 'voice-status' &&
-                (m.role === 'assistant' || m.role === 'user') &&
                 copyText.trim()
+              const showFeedback = m.role === 'assistant' && m.memory_ids?.length > 0
 
               return (
                 <div
                   key={i}
                   className={`bubble-row ${m.role === 'user' ? 'user-row' : 'assistant-row'}`}
                 >
-                  <div className="bubble-header">
-                    {showCopy ? <CopyButton text={copyText} label="Copy" /> : null}
-                  </div>
                   <div className={`bubble ${m.role}${m.kind === 'voice' ? ' voice-bubble' : ''}`}>
                     <MessageBody message={m} />
                   </div>
-                  {m.role === 'assistant' && m.memory_ids?.length > 0 && (
-                    <div className="feedback-buttons">
-                      <button
-                        type="button"
-                        className={`feedback-btn ${m.feedback === 'positive' ? 'selected positive' : ''}`}
-                        onClick={() => sendFeedback(i, 'positive')}
-                        disabled={Boolean(m.feedback)}
-                        title="Helpful response"
-                        aria-label="Thumbs up"
-                      >
-                        👍
-                      </button>
-                      <button
-                        type="button"
-                        className={`feedback-btn ${m.feedback === 'negative' ? 'selected negative' : ''}`}
-                        onClick={() => sendFeedback(i, 'negative')}
-                        disabled={Boolean(m.feedback)}
-                        title="Unhelpful response"
-                        aria-label="Thumbs down"
-                      >
-                        👎
-                      </button>
+                  {(showCopy || showFeedback) && (
+                    <div className="message-actions">
+                      {showCopy ? <CopyButton text={copyText} label="Copy" /> : null}
+                      {showFeedback ? (
+                        <>
+                          <button
+                            type="button"
+                            className={`feedback-btn ${m.feedback === 'positive' ? 'selected positive' : ''}`}
+                            onClick={() => sendFeedback(i, 'positive')}
+                            disabled={Boolean(m.feedback)}
+                            title="Helpful response"
+                            aria-label="Thumbs up"
+                          >
+                            👍
+                          </button>
+                          <button
+                            type="button"
+                            className={`feedback-btn ${m.feedback === 'negative' ? 'selected negative' : ''}`}
+                            onClick={() => sendFeedback(i, 'negative')}
+                            disabled={Boolean(m.feedback)}
+                            title="Unhelpful response"
+                            aria-label="Thumbs down"
+                          >
+                            👎
+                          </button>
+                        </>
+                      ) : null}
                     </div>
                   )}
                 </div>

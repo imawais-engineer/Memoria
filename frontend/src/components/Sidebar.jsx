@@ -1,24 +1,31 @@
-import { useState } from 'react'
-
-const PI_TOOLTIP =
-  'When enabled, I can access all your memories across chats. When disabled, I only see this session\'s context and essential facts.'
+import { useEffect, useRef, useState } from 'react'
 
 export default function Sidebar({
+  userId,
   sessions,
   activeSessionId,
   loading,
-  globalMemoryEnabled,
-  prefsSaving,
-  isMemoryless,
   creatingChat,
+  open,
   onSelect,
   onNewChat,
   onNewMemorylessChat,
   onDelete,
-  onGlobalMemoryToggle,
+  onRename,
 }) {
   const [pendingDelete, setPendingDelete] = useState(null)
   const [pendingMemoryless, setPendingMemoryless] = useState(false)
+  const [editingSessionId, setEditingSessionId] = useState(null)
+  const [editTitle, setEditTitle] = useState('')
+  const [savingTitle, setSavingTitle] = useState(false)
+  const editInputRef = useRef(null)
+
+  useEffect(() => {
+    if (editingSessionId && editInputRef.current) {
+      editInputRef.current.focus()
+      editInputRef.current.select()
+    }
+  }, [editingSessionId])
 
   function confirmDelete() {
     if (pendingDelete) {
@@ -32,92 +39,136 @@ export default function Sidebar({
     onNewMemorylessChat()
   }
 
+  function startEditing(session) {
+    setEditingSessionId(session.session_id)
+    setEditTitle(session.title)
+  }
+
+  function cancelEditing() {
+    setEditingSessionId(null)
+    setEditTitle('')
+  }
+
+  async function saveTitle(sessionId) {
+    const nextTitle = editTitle.trim()
+    if (!nextTitle || savingTitle) {
+      cancelEditing()
+      return
+    }
+    setSavingTitle(true)
+    try {
+      const res = await fetch(
+        `/sessions/${encodeURIComponent(sessionId)}?user_id=${encodeURIComponent(userId)}`,
+        {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ title: nextTitle }),
+        },
+      )
+      if (!res.ok) throw new Error(`Rename failed (${res.status})`)
+      const data = await res.json()
+      onRename?.(sessionId, data.title)
+      cancelEditing()
+    } catch {
+      cancelEditing()
+    } finally {
+      setSavingTitle(false)
+    }
+  }
+
   return (
-    <aside className="sidebar">
-      <div className="sidebar-new-row">
-        <button
-          type="button"
-          className="btn sidebar-new"
-          onClick={onNewChat}
-          disabled={creatingChat}
-        >
-          {creatingChat ? (
-            <span className="btn-loading">
-              <span className="spinner" aria-hidden="true" />
-              Starting…
-            </span>
-          ) : (
-            '+ New Chat'
-          )}
-        </button>
-        <button
-          type="button"
-          className="btn sidebar-new sidebar-memoryless-btn"
-          onClick={() => setPendingMemoryless(true)}
-          disabled={creatingChat}
-          title="Start a private chat with no memory storage"
-        >
-          🕶️ Memoryless
-        </button>
-      </div>
+    <aside className={`sidebar${open ? '' : ' sidebar--closed'}`} aria-hidden={!open}>
+      <div className="sidebar-inner">
+        <div className="sidebar-new-row">
+          <button
+            type="button"
+            className="btn sidebar-new"
+            onClick={onNewChat}
+            disabled={creatingChat}
+          >
+            {creatingChat ? (
+              <span className="btn-loading">
+                <span className="spinner" aria-hidden="true" />
+                Starting…
+              </span>
+            ) : (
+              '+ New Chat'
+            )}
+          </button>
+          <button
+            type="button"
+            className="btn sidebar-new sidebar-memoryless-btn"
+            onClick={() => setPendingMemoryless(true)}
+            disabled={creatingChat}
+            title="Start a private chat with no memory storage"
+          >
+            🕶️ Memoryless
+          </button>
+        </div>
 
-      <label
-        className={`pref-toggle sidebar-pi ${isMemoryless ? 'disabled' : ''}`}
-        title={
-          isMemoryless
-            ? 'Personal Intelligence is unavailable during MemoryLess sessions'
-            : PI_TOOLTIP
-        }
-      >
-        <input
-          type="checkbox"
-          checked={globalMemoryEnabled}
-          onChange={onGlobalMemoryToggle}
-          disabled={prefsSaving || isMemoryless}
-        />
-        <span>Personal Intelligence</span>
-      </label>
-
-      <div className="sidebar-list">
-        {loading && (
-          <div className="sidebar-empty">
-            <span className="spinner spinner-inline" aria-hidden="true" />
-            Loading chats…
-          </div>
-        )}
-        {!loading && sessions.length === 0 && (
-          <div className="sidebar-empty">No chats yet</div>
-        )}
-        {!loading &&
-          sessions.map((session) => (
-            <div
-              key={session.session_id}
-              className={`sidebar-item ${session.session_id === activeSessionId ? 'active' : ''} ${session.is_memoryless ? 'memoryless' : ''}`}
-            >
-              <button
-                type="button"
-                className="sidebar-item-btn"
-                onClick={() => onSelect(session.session_id)}
-                title={session.title}
-              >
-                {session.is_memoryless && (
-                  <span className="sidebar-icon" aria-hidden="true">
-                    🕶️
-                  </span>
-                )}
-                <span className="sidebar-item-title">{session.title}</span>
-              </button>
-              <button
-                type="button"
-                className="sidebar-delete"
-                onClick={() => setPendingDelete(session.session_id)}
-                aria-label={`Delete ${session.title}`}
-                title="Delete chat"
-              >
-                ×
-              </button>
+        <div className="sidebar-list">
+          {loading && (
+            <div className="sidebar-empty">
+              <span className="spinner spinner-inline" aria-hidden="true" />
+              Loading chats…
             </div>
-          ))}
+          )}
+          {!loading && sessions.length === 0 && (
+            <div className="sidebar-empty">No chats yet</div>
+          )}
+          {!loading &&
+            sessions.map((session) => (
+              <div
+                key={session.session_id}
+                className={`sidebar-item ${session.session_id === activeSessionId ? 'active' : ''} ${session.is_memoryless ? 'memoryless' : ''}`}
+              >
+                {editingSessionId === session.session_id ? (
+                  <input
+                    ref={editInputRef}
+                    className="sidebar-title-input"
+                    value={editTitle}
+                    onChange={(e) => setEditTitle(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault()
+                        saveTitle(session.session_id)
+                      }
+                      if (e.key === 'Escape') {
+                        e.preventDefault()
+                        cancelEditing()
+                      }
+                    }}
+                    onBlur={() => saveTitle(session.session_id)}
+                    disabled={savingTitle}
+                  />
+                ) : (
+                  <button
+                    type="button"
+                    className="sidebar-item-btn"
+                    onClick={() => onSelect(session.session_id)}
+                    onDoubleClick={() => startEditing(session)}
+                    title={`${session.title} (double-click to rename)`}
+                  >
+                    {session.is_memoryless && (
+                      <span className="sidebar-icon" aria-hidden="true">
+                        🕶️
+                      </span>
+                    )}
+                    <span className="sidebar-item-title">{session.title}</span>
+                  </button>
+                )}
+                <button
+                  type="button"
+                  className="sidebar-delete"
+                  onClick={() => setPendingDelete(session.session_id)}
+                  aria-label={`Delete ${session.title}`}
+                  title="Delete chat"
+                >
+                  ×
+                </button>
+              </div>
+            ))}
+        </div>
       </div>
 
       {pendingDelete && (

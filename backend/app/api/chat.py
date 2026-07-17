@@ -26,6 +26,7 @@ class ChatResponse(BaseModel):
     reply: str
     session_id: str
     memory_ids: list[str] = []
+    title: str | None = None
 
 
 @router.post("/chat", response_model=ChatResponse, tags=["chat"])

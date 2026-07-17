@@ -17,7 +17,7 @@ from app.core.redis_client import get_redis
 from app.memory.models import Memory
 from app.models.chat_message import ChatMessage
 from app.models.chat_session import ChatSession  # noqa: F401  (register FK table)
-from app.models.chat_session import ChatSession
+from app.services.session_titles import SLASH_HELP_REPLY, generate_session_title, title_from_slash_message
 
 router = APIRouter(tags=["sessions"])
 
@@ -166,28 +166,38 @@ async def touch_session_on_message(
     session_id: str,
     user_message: str,
     db: AsyncSession,
-) -> None:
-    """Auto-title new chats and bump ``updated_at`` on activity."""
+) -> str | None:
+    """Auto-title new chats and bump ``updated_at`` on activity.
+
+    Returns the session title when set or already meaningful, else ``None``.
+    """
 
     try:
         session_uuid = uuid.UUID(session_id)
     except ValueError:
-        return
+        return None
 
     session = (
         await db.execute(select(ChatSession).where(ChatSession.id == session_uuid))
     ).scalar_one_or_none()
     if session is None:
-        return
+        return None
 
     values: dict = {"updated_at": datetime.now(timezone.utc)}
-    if session.title == DEFAULT_TITLE:
-        values["title"] = _title_from_message(user_message)
+    new_title: str | None = None
+    stripped = user_message.strip()
+    if session.title == DEFAULT_TITLE and stripped and stripped != "/":
+        new_title = await generate_session_title(user_message)
+        values["title"] = new_title
 
     await db.execute(
         update(ChatSession).where(ChatSession.id == session_uuid).values(**values)
     )
     await db.commit()
+
+    if new_title is not None:
+        return new_title
+    return session.title if session.title != DEFAULT_TITLE else None
 
 
 @router.post("/sessions", response_model=SessionOut)

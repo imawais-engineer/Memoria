@@ -20,6 +20,7 @@ from app.memory.models import Memory
 from app.models.chat_message import ChatMessage
 from app.models.user import User
 from app.api.sessions import ensure_session_exists, touch_session_on_message
+from app.services.session_titles import SLASH_HELP_REPLY
 from app.memory.reflection import generate_user_reflection, get_latest_reflection
 from app.memory.retrieval import retrieve_context_and_ids
 from app.schemas.persona import format_persona_prompt
@@ -223,7 +224,16 @@ async def handle_message(
     )
     is_memoryless = session.is_memoryless
 
-    await touch_session_on_message(session_id, user_message, db_session)
+    if user_message.strip() == "/":
+        await touch_session_on_message(session_id, user_message, db_session)
+        return {
+            "reply": SLASH_HELP_REPLY,
+            "session_id": session_id,
+            "memory_ids": [],
+            "title": session.title if session.title != "New Chat" else None,
+        }
+
+    session_title = await touch_session_on_message(session_id, user_message, db_session)
     global_memory_enabled = await _get_global_memory_enabled(user_id, db_session)
     user_persona = await _get_user_persona(user_id, db_session)
 
@@ -338,4 +348,9 @@ async def handle_message(
     if not is_memoryless and user_msg_count % REFLECTION_EVERY_N_USER_MESSAGES == 0:
         asyncio.create_task(_run_reflection_background(user_id))
 
-    return {"reply": reply, "session_id": session_id, "memory_ids": memory_ids}
+    return {
+        "reply": reply,
+        "session_id": session_id,
+        "memory_ids": memory_ids,
+        "title": session_title,
+    }

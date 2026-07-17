@@ -21,6 +21,72 @@ async def test_list_models(client: AsyncClient):
 
 
 @pytest.mark.asyncio
+async def test_slash_only_returns_static_help(client: AsyncClient):
+    user_id = str(uuid.uuid4())
+    session_id = str(uuid.uuid4())
+
+    with patch(
+        "app.api.chat.handle_message",
+        new=AsyncMock(
+            return_value={
+                "reply": (
+                    "Available commands:\n\n"
+                    "/imagine <prompt> – Generate an image\n"
+                    "/gen_video <prompt> – Generate a video\n"
+                    "/gen_voice <prompt> – Create a voice overview of the conversation"
+                ),
+                "session_id": session_id,
+                "memory_ids": [],
+                "title": None,
+            }
+        ),
+    ) as mock_handle:
+        res = await client.post(
+            "/chat",
+            json={
+                "user_id": user_id,
+                "message": "/",
+                "session_id": session_id,
+            },
+        )
+
+    assert res.status_code == 200
+    payload = res.json()
+    assert payload["memory_ids"] == []
+    assert payload["session_id"] == session_id
+    assert "/imagine" in payload["reply"]
+    assert "/gen_video" in payload["reply"]
+    assert "/gen_voice" in payload["reply"]
+    mock_handle.assert_awaited_once()
+    assert mock_handle.await_args.args[1] == "/"
+
+
+@pytest.mark.asyncio
+async def test_chat_returns_title_when_provided(client: AsyncClient):
+    with patch(
+        "app.api.chat.handle_message",
+        new=AsyncMock(
+            return_value={
+                "reply": "Hello!",
+                "session_id": "s1",
+                "memory_ids": [],
+                "title": "Istanbul Trip Planning",
+            }
+        ),
+    ):
+        res = await client.post(
+            "/chat",
+            json={
+                "user_id": str(uuid.uuid4()),
+                "message": "I am planning a trip to Istanbul",
+            },
+        )
+
+    assert res.status_code == 200
+    assert res.json()["title"] == "Istanbul Trip Planning"
+
+
+@pytest.mark.asyncio
 async def test_chat_accepts_model_field(client: AsyncClient):
     with patch(
         "app.api.chat.handle_message",
@@ -158,24 +224,47 @@ async def test_two_videos_then_third_returns_429(client: AsyncClient, db_session
 
 
 @pytest.mark.asyncio
-async def test_voice_generation_returns_overview_and_audio(client: AsyncClient):
+async def test_voice_generation_returns_overview_and_audio(
+    client: AsyncClient,
+    db_session_factory,
+):
+    user_id = uuid.uuid4()
+    session_id = uuid.uuid4()
+    async with db_session_factory() as db:
+        db.add(
+            User(
+                id=user_id,
+                username=f"voice_{user_id.hex[:8]}",
+                first_name="Test",
+                last_name="User",
+                favorite_book="Dune",
+            )
+        )
+        await db.commit()
+
     fake_overview = "You discussed memory tiers and LaTeX rendering."
     fake_audio = "data:audio/wav;base64,AAAA"
 
-    with patch(
-        "app.api.generate.generate_voice_overview",
-        new=AsyncMock(
-            return_value={
-                "overview_text": fake_overview,
-                "audio_data_uri": fake_audio,
-            }
+    with (
+        patch(
+            "app.api.generate.generate_voice_overview",
+            new=AsyncMock(
+                return_value={
+                    "overview_text": fake_overview,
+                    "audio_data_uri": fake_audio,
+                }
+            ),
+        ),
+        patch(
+            "app.api.sessions.generate_session_title",
+            new=AsyncMock(return_value="Voice: create an overview of this discussion"),
         ),
     ):
         res = await client.post(
             "/api/generate/voice",
             json={
-                "user_id": str(uuid.uuid4()),
-                "session_id": str(uuid.uuid4()),
+                "user_id": str(user_id),
+                "session_id": str(session_id),
                 "prompt": "create an overview of this discussion",
             },
         )
@@ -184,6 +273,7 @@ async def test_voice_generation_returns_overview_and_audio(client: AsyncClient):
     payload = res.json()
     assert payload["overview_text"] == fake_overview
     assert payload["audio_data_uri"] == fake_audio
+    assert payload["title"] == "Voice: create an overview of this discussion"
 
 
 @pytest.mark.asyncio

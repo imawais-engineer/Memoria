@@ -11,6 +11,20 @@ import Sidebar from './components/Sidebar.jsx'
 export const DEMO_TOKEN = 'memoria-demo-token'
 
 const AUTH_STORAGE_KEY = 'memoria_auth'
+const SIDEBAR_OPEN_KEY = 'memoria_sidebar_open'
+
+const PI_TOOLTIP =
+  "When enabled, I can access all your memories across chats. When disabled, I only see this session's context and essential facts."
+
+function loadSidebarOpen() {
+  try {
+    const stored = localStorage.getItem(SIDEBAR_OPEN_KEY)
+    if (stored === null) return true
+    return stored === 'true'
+  } catch {
+    return true
+  }
+}
 
 function sessionStorageKey(userId) {
   return `memoria_active_session_${userId}`
@@ -79,6 +93,7 @@ function MainApp({ auth, onAuth, onLogout }) {
   const [globalMemoryEnabled, setGlobalMemoryEnabled] = useState(true)
   const [persona, setPersona] = useState(null)
   const [prefsSaving, setPrefsSaving] = useState(false)
+  const [sidebarOpen, setSidebarOpen] = useState(loadSidebarOpen)
 
   const userId = auth?.user_id
   const activeSession = sessions.find((session) => session.session_id === activeSessionId)
@@ -325,16 +340,47 @@ function MainApp({ auth, onAuth, onLogout }) {
   )
 
   const handleSessionCreated = useCallback(
-    async (sessionId, { isMemoryless: createdMemoryless }) => {
+    async (sessionId, { isMemoryless: createdMemoryless, title }) => {
       setPendingSession(null)
       setActiveSessionId(sessionId)
       if (!createdMemoryless) {
         localStorage.setItem(sessionStorageKey(userId), sessionId)
       }
       await loadSessions()
+      if (title) {
+        setSessions((current) => {
+          const exists = current.some((s) => s.session_id === sessionId)
+          if (exists) {
+            return current.map((s) =>
+              s.session_id === sessionId ? { ...s, title } : s,
+            )
+          }
+          return current
+        })
+      }
     },
     [loadSessions, userId],
   )
+
+  const handleSessionTitleUpdate = useCallback((sessionId, title) => {
+    setSessions((current) =>
+      current.map((session) =>
+        session.session_id === sessionId ? { ...session, title } : session,
+      ),
+    )
+  }, [])
+
+  const handleRenameSession = useCallback((sessionId, title) => {
+    handleSessionTitleUpdate(sessionId, title)
+  }, [handleSessionTitleUpdate])
+
+  const toggleSidebar = useCallback(() => {
+    setSidebarOpen((open) => {
+      const next = !open
+      localStorage.setItem(SIDEBAR_OPEN_KEY, String(next))
+      return next
+    })
+  }, [])
 
   const handlePersonaSaved = useCallback((data) => {
     setPersona(data.persona ?? null)
@@ -345,7 +391,7 @@ function MainApp({ auth, onAuth, onLogout }) {
   }, [auth, onAuth])
 
   const handleGlobalMemoryToggle = useCallback(async () => {
-    if (prefsSaving) return
+    if (prefsSaving || isMemoryless) return
     const nextValue = !globalMemoryEnabled
     setPrefsSaving(true)
     setSessionsError('')
@@ -370,7 +416,7 @@ function MainApp({ auth, onAuth, onLogout }) {
     } finally {
       setPrefsSaving(false)
     }
-  }, [auth, globalMemoryEnabled, onAuth, prefsSaving])
+  }, [auth, globalMemoryEnabled, isMemoryless, onAuth, prefsSaving])
 
   useEffect(() => {
     if (!activeSession?.is_memoryless || !activeSessionId || isPendingSession) {
@@ -390,12 +436,37 @@ function MainApp({ auth, onAuth, onLogout }) {
     <div className="app-shell">
       <div className="app">
         <div className="header">
-          <div className="logo">M</div>
-          <div>
-            <div className="title">Memoria</div>
-            <div className="subtitle">Personal AI with long-term memory</div>
+          <button
+            type="button"
+            className="hamburger-btn"
+            onClick={toggleSidebar}
+            aria-label={sidebarOpen ? 'Close sidebar' : 'Open sidebar'}
+            aria-expanded={sidebarOpen}
+            title={sidebarOpen ? 'Close sidebar' : 'Open sidebar'}
+          >
+            ☰
+          </button>
+          <div className="header-brand">
+            <div className="logo">M</div>
+            <div>
+              <div className="title">Memoria</div>
+              <div className="subtitle">Personal AI with long-term memory</div>
+            </div>
           </div>
           <div className="header-actions">
+            <label
+              className={`pref-toggle header-pi${isMemoryless ? ' disabled' : ''}`}
+              title={PI_TOOLTIP}
+            >
+              <input
+                type="checkbox"
+                checked={globalMemoryEnabled}
+                onChange={handleGlobalMemoryToggle}
+                disabled={prefsSaving || isMemoryless}
+                aria-label="Personal Intelligence"
+              />
+              <span>Personal Intelligence</span>
+            </label>
             <span className="user-greeting">@{auth.username}</span>
             <button type="button" className="logout-btn" onClick={onLogout}>
               Logout
@@ -403,20 +474,19 @@ function MainApp({ auth, onAuth, onLogout }) {
           </div>
         </div>
 
-        <div className="workspace">
+        <div className={`workspace${sidebarOpen ? '' : ' workspace--sidebar-closed'}`}>
           <Sidebar
+            userId={userId}
             sessions={sessions}
             activeSessionId={activeSessionId}
             loading={sessionsLoading}
-            globalMemoryEnabled={globalMemoryEnabled}
-            prefsSaving={prefsSaving}
-            isMemoryless={isMemoryless}
+            open={sidebarOpen}
             creatingChat={creatingChat}
             onSelect={handleSelectSession}
             onNewChat={handleNewChat}
             onNewMemorylessChat={handleNewMemorylessChat}
             onDelete={handleDeleteSession}
-            onGlobalMemoryToggle={handleGlobalMemoryToggle}
+            onRename={handleRenameSession}
           />
 
           <div className="main-panel">
@@ -448,6 +518,7 @@ function MainApp({ auth, onAuth, onLogout }) {
                 isPendingSession={isPendingSession}
                 isMemoryless={isMemoryless}
                 onSessionCreated={handleSessionCreated}
+                onSessionTitleUpdate={handleSessionTitleUpdate}
               />
             ) : tab === 'memory' ? (
               <MemoryGraph
