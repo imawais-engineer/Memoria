@@ -4,9 +4,16 @@ import remarkGfm from 'remark-gfm'
 import remarkMath from 'remark-math'
 import rehypeKatex from 'rehype-katex'
 import 'katex/dist/katex.min.css'
+import ModelDropdown from './ModelDropdown.jsx'
 
 const SCROLL_THRESHOLD_PX = 50
 const TEXTAREA_MAX_VH = 40
+
+const PI_INFO =
+  'When enabled, I can access all your memories across chats. When disabled, I only see this session\'s context and essential facts.'
+
+const MEMORYLESS_INFO =
+  'This session will not use or store any memories. Your conversation will be completely private and won\'t be remembered.'
 
 const VOICE_STATUS_MESSAGES = [
   '🔄 Running voice generation…',
@@ -253,7 +260,7 @@ export default function Chat({
   isMemoryless = false,
   globalMemoryEnabled = true,
   prefsSaving = false,
-  piTooltip = '',
+  sidebarOpen = true,
   injectMedia = null,
   onSessionCreated,
   onSessionTitleUpdate,
@@ -271,6 +278,7 @@ export default function Chat({
   const [showScrollDown, setShowScrollDown] = useState(false)
   const [slashMenuOpen, setSlashMenuOpen] = useState(false)
   const [slashHighlight, setSlashHighlight] = useState(0)
+  const [infoDialog, setInfoDialog] = useState(null)
   const windowRef = useRef(null)
   const textareaRef = useRef(null)
   const stickToBottomRef = useRef(true)
@@ -287,6 +295,25 @@ export default function Chat({
   }, [mediaGenType, activeSlashCommand])
 
   const showMemorylessToggle = isPendingSession && messages.length === 0 && !sending
+
+  useEffect(() => {
+    if (!infoDialog) return undefined
+    const timer = setTimeout(() => setInfoDialog(null), 4500)
+    return () => clearTimeout(timer)
+  }, [infoDialog])
+
+  async function handlePiToggle() {
+    if (isMemoryless || prefsSaving) return
+    const turningOn = !globalMemoryEnabled
+    await onGlobalMemoryToggle?.()
+    if (turningOn) setInfoDialog('pi')
+  }
+
+  async function handleMemorylessToggle() {
+    const turningOn = !isMemoryless
+    await onMemorylessChange?.(turningOn)
+    if (turningOn) setInfoDialog('memoryless')
+  }
 
   const adjustTextareaHeight = useCallback(() => {
     const el = textareaRef.current
@@ -670,67 +697,77 @@ export default function Chat({
 
   return (
     <div className="chat-view">
-      <div className="chat-toolbar">
-        {mediaModelOverride ? (
-          <div
-            className={`model-select model-select--media`}
-            style={{ '--media-accent': mediaModelOverride.color }}
-            aria-live="polite"
-          >
-            <span className="model-select-media-label">{mediaModelOverride.modelLabel}</span>
-            {sending && mediaGenType ? (
-              <span className="spinner spinner-inline" aria-hidden="true" />
-            ) : null}
+      <div className={`chat-toolbar${sidebarOpen ? '' : ' chat-toolbar--sidebar-closed'}`}>
+        <div className="chat-toolbar-left">
+          {sidebarOpen && (
+            mediaModelOverride ? (
+              <div
+                className="model-select model-select--media"
+                style={{ '--media-accent': mediaModelOverride.color }}
+                aria-live="polite"
+              >
+                <span className="model-select-media-label">{mediaModelOverride.modelLabel}</span>
+                {sending && mediaGenType ? (
+                  <span className="spinner spinner-inline" aria-hidden="true" />
+                ) : null}
+              </div>
+            ) : (
+              <ModelDropdown
+                options={modelOptions}
+                value={selectedModel}
+                onChange={setSelectedModel}
+                disabled={sending}
+              />
+            )
+          )}
+        </div>
+
+        <div className="toggle-card-stack">
+          <div className="toggle-card">
+            <label className={`toggle-card-row${isMemoryless ? ' disabled' : ''}`}>
+              <span className="toggle-card-label">Personal Intelligence</span>
+              <button
+                type="button"
+                className={`pi-switch-track ${globalMemoryEnabled ? 'on' : 'off'}`}
+                onClick={handlePiToggle}
+                disabled={prefsSaving || isMemoryless}
+                aria-pressed={globalMemoryEnabled}
+                aria-label="Personal Intelligence"
+              >
+                {globalMemoryEnabled ? 'ON' : 'OFF'}
+              </button>
+            </label>
+
+            {showMemorylessToggle && (
+              <label className="toggle-card-row">
+                <span className="toggle-card-label">Memoryless</span>
+                <button
+                  type="button"
+                  className={`pi-switch-track ${isMemoryless ? 'on memoryless-on' : 'off'}`}
+                  onClick={handleMemorylessToggle}
+                  aria-pressed={isMemoryless}
+                  aria-label="Memoryless session"
+                >
+                  {isMemoryless ? 'ON' : 'OFF'}
+                </button>
+              </label>
+            )}
           </div>
-        ) : (
-          <select
-            className="model-select"
-            value={selectedModel}
-            onChange={(e) => setSelectedModel(e.target.value)}
-            disabled={sending}
-            aria-label="Chat model"
-            title="Chat model"
-          >
-            {modelOptions.map((model) => (
-              <option key={model.id} value={model.id}>
-                {model.name}
-              </option>
-            ))}
-          </select>
-        )}
 
-        <label
-          className={`pi-switch${isMemoryless ? ' disabled' : ''}`}
-          title={piTooltip}
-        >
-          <input
-            type="checkbox"
-            checked={globalMemoryEnabled}
-            onChange={onGlobalMemoryToggle}
-            disabled={prefsSaving || isMemoryless}
-            aria-label="Personal Intelligence"
-          />
-          <span className={`pi-switch-track ${globalMemoryEnabled ? 'on' : 'off'}`}>
-            {globalMemoryEnabled ? 'ON' : 'OFF'}
-          </span>
-          <span className="pi-switch-label">Personal Intelligence</span>
-        </label>
-
-        <div className="chat-toolbar-spacer" />
-
-        {showMemorylessToggle && (
-          <label
-            className={`memoryless-toggle${isMemoryless ? ' active' : ''}`}
-            title="Private chat — nothing will be stored in long-term memory"
-          >
-            <input
-              type="checkbox"
-              checked={isMemoryless}
-              onChange={(e) => onMemorylessChange?.(e.target.checked)}
-            />
-            Memoryless
-          </label>
-        )}
+          {infoDialog && (
+            <div className="toggle-info-dialog" role="status">
+              <p>{infoDialog === 'pi' ? PI_INFO : MEMORYLESS_INFO}</p>
+              <button
+                type="button"
+                className="toggle-info-dismiss"
+                onClick={() => setInfoDialog(null)}
+                aria-label="Dismiss"
+              >
+                ×
+              </button>
+            </div>
+          )}
+        </div>
       </div>
 
       {isMemoryless && !showMemorylessToggle && (

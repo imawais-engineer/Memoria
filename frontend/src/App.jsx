@@ -13,9 +13,6 @@ export const DEMO_TOKEN = 'memoria-demo-token'
 const AUTH_STORAGE_KEY = 'memoria_auth'
 const SIDEBAR_OPEN_KEY = 'memoria_sidebar_open'
 
-const PI_TOOLTIP =
-  "When enabled, I can access all your memories across chats. When disabled, I only see this session's context and essential facts."
-
 function loadSidebarOpen() {
   try {
     const stored = localStorage.getItem(SIDEBAR_OPEN_KEY)
@@ -369,6 +366,33 @@ function MainApp({ auth, onAuth, onLogout }) {
     })
   }, [auth, onAuth])
 
+  const disableGlobalMemory = useCallback(async () => {
+    if (!globalMemoryEnabled || prefsSaving) return
+    setPrefsSaving(true)
+    setSessionsError('')
+    try {
+      const res = await fetch('/auth/preferences', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          user_id: auth.user_id,
+          global_memory_enabled: false,
+        }),
+      })
+      if (!res.ok) throw new Error(`Failed to update preference (${res.status})`)
+      const data = await res.json()
+      setGlobalMemoryEnabled(data.global_memory_enabled)
+      onAuth({
+        ...auth,
+        global_memory_enabled: data.global_memory_enabled,
+      })
+    } catch (e) {
+      setSessionsError(e.message || 'Failed to update Personal Intelligence setting')
+    } finally {
+      setPrefsSaving(false)
+    }
+  }, [auth, globalMemoryEnabled, onAuth, prefsSaving])
+
   const handleGlobalMemoryToggle = useCallback(async () => {
     if (prefsSaving || isMemoryless) return
     const nextValue = !globalMemoryEnabled
@@ -397,7 +421,7 @@ function MainApp({ auth, onAuth, onLogout }) {
     }
   }, [auth, globalMemoryEnabled, isMemoryless, onAuth, prefsSaving])
 
-  const handleMemorylessChange = useCallback((enabled) => {
+  const handleMemorylessChange = useCallback(async (enabled) => {
     if (!isPendingSession || !pendingSession) return
     setPendingSession({
       ...pendingSession,
@@ -405,10 +429,19 @@ function MainApp({ auth, onAuth, onLogout }) {
     })
     if (enabled) {
       localStorage.removeItem(sessionStorageKey(userId))
+      if (globalMemoryEnabled) {
+        await disableGlobalMemory()
+      }
     } else {
       localStorage.setItem(sessionStorageKey(userId), pendingSession.sessionId)
     }
-  }, [isPendingSession, pendingSession, userId])
+  }, [
+    disableGlobalMemory,
+    globalMemoryEnabled,
+    isPendingSession,
+    pendingSession,
+    userId,
+  ])
 
   const handleOpenMedia = useCallback((asset) => {
     setView('chat')
@@ -479,7 +512,7 @@ function MainApp({ auth, onAuth, onLogout }) {
                 isMemoryless={isMemoryless}
                 globalMemoryEnabled={globalMemoryEnabled}
                 prefsSaving={prefsSaving}
-                piTooltip={PI_TOOLTIP}
+                sidebarOpen={sidebarOpen}
                 injectMedia={injectMedia}
                 onSessionCreated={handleSessionCreated}
                 onSessionTitleUpdate={handleSessionTitleUpdate}

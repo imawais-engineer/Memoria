@@ -36,6 +36,7 @@ export default function Sidebar({
   const [editTitle, setEditTitle] = useState('')
   const [savingTitle, setSavingTitle] = useState(false)
   const [menuSessionId, setMenuSessionId] = useState(null)
+  const [profileMenuOpen, setProfileMenuOpen] = useState(false)
   const [mediaOpen, setMediaOpen] = useState(true)
   const [assets, setAssets] = useState([])
   const [assetsLoading, setAssetsLoading] = useState(false)
@@ -81,6 +82,9 @@ export default function Sidebar({
     function closeMenus(e) {
       if (!e.target.closest?.('.sidebar-chat-menu-wrap')) {
         setMenuSessionId(null)
+      }
+      if (!e.target.closest?.('.sidebar-profile-wrap')) {
+        setProfileMenuOpen(false)
       }
     }
     document.addEventListener('click', closeMenus)
@@ -303,17 +307,51 @@ export default function Sidebar({
           </div>
         </div>
 
-        <div className="sidebar-profile">
-          <div className="sidebar-avatar" aria-hidden="true">
-            {avatarLetter}
-          </div>
-          <div className="sidebar-profile-meta">
-            <div className="sidebar-profile-user">@{username}</div>
-            <div className="sidebar-profile-name">{displayName || username}</div>
-          </div>
-          <button type="button" className="sidebar-logout" onClick={onLogout}>
-            Logout
+        <div className="sidebar-profile-wrap">
+          <button
+            type="button"
+            className="sidebar-profile"
+            onClick={(e) => {
+              e.stopPropagation()
+              setProfileMenuOpen((open) => !open)
+            }}
+            aria-expanded={profileMenuOpen}
+            aria-haspopup="menu"
+          >
+            <div className="sidebar-avatar" aria-hidden="true">
+              {avatarLetter}
+            </div>
+            <div className="sidebar-profile-meta">
+              <div className="sidebar-profile-name">{displayName || username}</div>
+              <div className="sidebar-profile-user">@{username}</div>
+            </div>
           </button>
+
+          {profileMenuOpen && (
+            <div className="sidebar-profile-menu" role="menu">
+              <button type="button" role="menuitem" onClick={() => setProfileMenuOpen(false)}>
+                Settings
+              </button>
+              <button type="button" role="menuitem" onClick={() => setProfileMenuOpen(false)}>
+                Help
+              </button>
+              <button type="button" role="menuitem" onClick={() => setProfileMenuOpen(false)}>
+                Feedback
+              </button>
+              <div className="sidebar-profile-menu-divider" />
+              <button
+                type="button"
+                role="menuitem"
+                className="danger"
+                onClick={() => {
+                  setProfileMenuOpen(false)
+                  onLogout()
+                }}
+              >
+                Logout
+              </button>
+            </div>
+          )}
         </div>
       </div>
 
