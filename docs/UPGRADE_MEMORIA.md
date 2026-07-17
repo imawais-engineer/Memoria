@@ -597,10 +597,10 @@ Strong feature highlights, architecture overview, deployment instructions.
 | Features | `#features` | 6 glass cards (persistent memory, forgetting, PI, MemoryLess, MCP, feedback) |
 | How it Works | `#how-it-works` | 4-step Qwen-powered timeline |
 | Benchmarks | `#benchmarks` | **Up to 78%** stat, inline bars, chart image `public/images/benchmark.svg` |
-| Auth | `#get-started` | Embedded `<Auth embedded onAuth={…} />` — no separate auth route |
+| Auth | `/auth` | Standalone `Auth.jsx` (login + signup); redirects to `/app` when logged in |
 | Footer | — | GitHub, Devpost, Architecture, Docs links |
 
-**Auth flow change:** `App.jsx` renders a single `<Landing onAuth={handleAuth} />` when logged out. The previous two-step flow (`Landing` → separate `Auth` view via `authView` state) was removed. Successful login/signup still calls `onAuth` and transitions to the main dashboard.
+**Auth flow:** `/` shows the landing dashboard; **Get Started** opens `/auth`. After login/signup, users are redirected to `/app` (Chat / Memory / Persona). Logged-in users visiting `/` or `/auth` are sent straight to `/app`.
 
 **Files touched:** `frontend/src/components/Landing.jsx`, `Landing.css`, `Auth.jsx` (`embedded` prop), `App.jsx`, `public/images/benchmark.svg`; removed legacy `.landing-*` rules from `index.css`.
 
