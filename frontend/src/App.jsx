@@ -83,7 +83,7 @@ function AuthRoute({ onAuth }) {
 }
 
 function MainApp({ auth, onAuth, onLogout }) {
-  const [tab, setTab] = useState('chat')
+  const [view, setView] = useState('chat')
   const [sessions, setSessions] = useState([])
   const [activeSessionId, setActiveSessionId] = useState(null)
   const [pendingSession, setPendingSession] = useState(null)
@@ -94,8 +94,10 @@ function MainApp({ auth, onAuth, onLogout }) {
   const [persona, setPersona] = useState(null)
   const [prefsSaving, setPrefsSaving] = useState(false)
   const [sidebarOpen, setSidebarOpen] = useState(loadSidebarOpen)
+  const [injectMedia, setInjectMedia] = useState(null)
 
   const userId = auth?.user_id
+  const displayName = [auth?.first_name, auth?.last_name].filter(Boolean).join(' ')
   const activeSession = sessions.find((session) => session.session_id === activeSessionId)
   const isPendingSession = Boolean(
     pendingSession && pendingSession.sessionId === activeSessionId,
@@ -115,6 +117,7 @@ function MainApp({ auth, onAuth, onLogout }) {
       setGlobalMemoryEnabled(data.global_memory_enabled)
       setPersona(data.persona ?? null)
       onAuth({
+        ...auth,
         user_id: userId,
         username: auth.username,
         global_memory_enabled: data.global_memory_enabled,
@@ -123,12 +126,13 @@ function MainApp({ auth, onAuth, onLogout }) {
     } catch {
       // preferences are optional on load failure
     }
-  }, [userId, auth.username, onAuth])
+  }, [userId, auth, onAuth])
 
   useEffect(() => {
     setGlobalMemoryEnabled(auth.global_memory_enabled ?? true)
     fetchPreferences()
-  }, [userId, auth.global_memory_enabled, fetchPreferences])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [userId])
 
   const loadSessions = useCallback(async () => {
     if (!userId) return []
@@ -177,16 +181,16 @@ function MainApp({ auth, onAuth, onLogout }) {
     [deleteSessionById],
   )
 
-  const startPendingChat = useCallback((isMemoryless = false) => {
-    const pending = newPendingSession(isMemoryless)
+  const startPendingChat = useCallback((isMemorylessFlag = false) => {
+    const pending = newPendingSession(isMemorylessFlag)
     setPendingSession(pending)
     setActiveSessionId(pending.sessionId)
-    if (!isMemoryless) {
+    if (!isMemorylessFlag) {
       localStorage.setItem(sessionStorageKey(userId), pending.sessionId)
     } else {
       localStorage.removeItem(sessionStorageKey(userId))
     }
-    setTab('chat')
+    setView('chat')
   }, [userId])
 
   useEffect(() => {
@@ -250,7 +254,7 @@ function MainApp({ auth, onAuth, onLogout }) {
       } else {
         localStorage.removeItem(sessionStorageKey(userId))
       }
-      setTab('chat')
+      setView('chat')
     },
     [
       activeSession,
@@ -276,31 +280,6 @@ function MainApp({ auth, onAuth, onLogout }) {
       startPendingChat(false)
     } catch (e) {
       setSessionsError(e.message || 'Failed to start chat')
-    } finally {
-      setCreatingChat(false)
-    }
-  }, [
-    activeSession,
-    activeSessionId,
-    deleteSessionById,
-    isPendingSession,
-    startPendingChat,
-  ])
-
-  const handleNewMemorylessChat = useCallback(async () => {
-    setSessionsError('')
-    setCreatingChat(true)
-    try {
-      if (
-        activeSession?.is_memoryless &&
-        activeSessionId &&
-        !isPendingSession
-      ) {
-        await deleteSessionById(activeSessionId, { quiet: true })
-      }
-      startPendingChat(true)
-    } catch (e) {
-      setSessionsError(e.message || 'Failed to start memoryless chat')
     } finally {
       setCreatingChat(false)
     }
@@ -418,6 +397,31 @@ function MainApp({ auth, onAuth, onLogout }) {
     }
   }, [auth, globalMemoryEnabled, isMemoryless, onAuth, prefsSaving])
 
+  const handleMemorylessChange = useCallback((enabled) => {
+    if (!isPendingSession || !pendingSession) return
+    setPendingSession({
+      ...pendingSession,
+      isMemoryless: enabled,
+    })
+    if (enabled) {
+      localStorage.removeItem(sessionStorageKey(userId))
+    } else {
+      localStorage.setItem(sessionStorageKey(userId), pendingSession.sessionId)
+    }
+  }, [isPendingSession, pendingSession, userId])
+
+  const handleOpenMedia = useCallback((asset) => {
+    setView('chat')
+    if (!activeSessionId) return
+    setInjectMedia({
+      id: asset.id,
+      type: asset.type,
+      url: asset.url,
+      prompt: asset.prompt,
+      nonce: Date.now(),
+    })
+  }, [activeSessionId])
+
   useEffect(() => {
     if (!activeSession?.is_memoryless || !activeSessionId || isPendingSession) {
       return undefined
@@ -434,93 +438,55 @@ function MainApp({ auth, onAuth, onLogout }) {
 
   return (
     <div className="app-shell">
-      <div className="app">
-        <div className="header">
-          <button
-            type="button"
-            className="hamburger-btn"
-            onClick={toggleSidebar}
-            aria-label={sidebarOpen ? 'Close sidebar' : 'Open sidebar'}
-            aria-expanded={sidebarOpen}
-            title={sidebarOpen ? 'Close sidebar' : 'Open sidebar'}
-          >
-            ☰
-          </button>
-          <div className="header-brand">
-            <div className="logo">M</div>
-            <div>
-              <div className="title">Memoria</div>
-              <div className="subtitle">Personal AI with long-term memory</div>
-            </div>
-          </div>
-          <div className="header-actions">
-            <label
-              className={`pref-toggle header-pi${isMemoryless ? ' disabled' : ''}`}
-              title={PI_TOOLTIP}
-            >
-              <input
-                type="checkbox"
-                checked={globalMemoryEnabled}
-                onChange={handleGlobalMemoryToggle}
-                disabled={prefsSaving || isMemoryless}
-                aria-label="Personal Intelligence"
-              />
-              <span>Personal Intelligence</span>
-            </label>
-            <span className="user-greeting">@{auth.username}</span>
-            <button type="button" className="logout-btn" onClick={onLogout}>
-              Logout
-            </button>
-          </div>
-        </div>
+      <button
+        type="button"
+        className="sidebar-toggle"
+        onClick={toggleSidebar}
+        aria-label={sidebarOpen ? 'Close sidebar' : 'Open sidebar'}
+        aria-expanded={sidebarOpen}
+        title={sidebarOpen ? 'Close sidebar' : 'Open sidebar'}
+      >
+        {sidebarOpen ? '‹' : '☰'}
+      </button>
 
-        <div className={`workspace${sidebarOpen ? '' : ' workspace--sidebar-closed'}`}>
-          <Sidebar
-            userId={userId}
-            sessions={sessions}
-            activeSessionId={activeSessionId}
-            loading={sessionsLoading}
-            open={sidebarOpen}
-            creatingChat={creatingChat}
-            onSelect={handleSelectSession}
-            onNewChat={handleNewChat}
-            onNewMemorylessChat={handleNewMemorylessChat}
-            onDelete={handleDeleteSession}
-            onRename={handleRenameSession}
-          />
+      <div className={`app-layout${sidebarOpen ? '' : ' app-layout--sidebar-closed'}`}>
+        <Sidebar
+          userId={userId}
+          username={auth.username}
+          displayName={displayName}
+          sessions={sessions}
+          activeSessionId={activeSessionId}
+          activeView={view}
+          loading={sessionsLoading}
+          open={sidebarOpen}
+          creatingChat={creatingChat}
+          onSelect={handleSelectSession}
+          onNewChat={handleNewChat}
+          onNavigate={setView}
+          onDelete={handleDeleteSession}
+          onRename={handleRenameSession}
+          onOpenMedia={handleOpenMedia}
+          onLogout={onLogout}
+        />
 
-          <div className="main-panel">
-            <div className="tabs">
-              <button
-                className={`tab ${tab === 'chat' ? 'active' : ''}`}
-                onClick={() => setTab('chat')}
-              >
-                Chat
-              </button>
-              <button
-                className={`tab ${tab === 'memory' ? 'active' : ''}`}
-                onClick={() => setTab('memory')}
-              >
-                Memory
-              </button>
-              <button
-                className={`tab ${tab === 'persona' ? 'active' : ''}`}
-                onClick={() => setTab('persona')}
-              >
-                Persona
-              </button>
-            </div>
-
-            {tab === 'chat' ? (
+        <main className="canvas">
+          <div className="canvas-body">
+            {view === 'chat' ? (
               <Chat
                 userId={userId}
                 sessionId={activeSessionId}
                 isPendingSession={isPendingSession}
                 isMemoryless={isMemoryless}
+                globalMemoryEnabled={globalMemoryEnabled}
+                prefsSaving={prefsSaving}
+                piTooltip={PI_TOOLTIP}
+                injectMedia={injectMedia}
                 onSessionCreated={handleSessionCreated}
                 onSessionTitleUpdate={handleSessionTitleUpdate}
+                onGlobalMemoryToggle={handleGlobalMemoryToggle}
+                onMemorylessChange={handleMemorylessChange}
               />
-            ) : tab === 'memory' ? (
+            ) : view === 'memory' ? (
               <MemoryGraph
                 userId={userId}
                 username={auth?.username}
@@ -533,9 +499,9 @@ function MainApp({ auth, onAuth, onLogout }) {
                 onSaved={handlePersonaSaved}
               />
             )}
-            {sessionsError && <div className="error">{sessionsError}</div>}
           </div>
-        </div>
+          {sessionsError && <div className="canvas-error">{sessionsError}</div>}
+        </main>
       </div>
     </div>
   )
@@ -562,6 +528,8 @@ export default function App() {
         current?.user_id === user.user_id &&
         current?.username === user.username &&
         current?.global_memory_enabled === user.global_memory_enabled &&
+        current?.first_name === user.first_name &&
+        current?.last_name === user.last_name &&
         JSON.stringify(current?.persona) === JSON.stringify(user.persona)
       ) {
         return current

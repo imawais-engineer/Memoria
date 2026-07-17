@@ -59,6 +59,8 @@ class PersonaOut(BaseModel):
 class AuthResponse(BaseModel):
     user_id: str
     username: str
+    first_name: str = ""
+    last_name: str = ""
     global_memory_enabled: bool = True
     persona: PersonaOut
 
@@ -105,6 +107,8 @@ def _user_to_auth(user: User) -> AuthResponse:
     return AuthResponse(
         user_id=str(user.id),
         username=user.username,
+        first_name=user.first_name or "",
+        last_name=user.last_name or "",
         global_memory_enabled=user.global_memory_enabled,
         persona=_persona_out(user.persona),
     )

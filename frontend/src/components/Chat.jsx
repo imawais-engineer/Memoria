@@ -20,7 +20,7 @@ const SLASH_COMMANDS = [
     prefix: '/imagine',
     type: 'image',
     endpoint: '/api/generate/image',
-    color: '#4ade80',
+    color: '#22c55e',
     hint: 'Image generation',
     modelLabel: 'Image Generation (wan2.1-t2i-plus)',
   },
@@ -28,7 +28,7 @@ const SLASH_COMMANDS = [
     prefix: '/gen_video',
     type: 'video',
     endpoint: '/api/generate/video',
-    color: '#60a5fa',
+    color: '#3b82f6',
     hint: 'Video generation',
     modelLabel: 'Video Generation (wan2.1-t2v-turbo)',
   },
@@ -36,7 +36,7 @@ const SLASH_COMMANDS = [
     prefix: '/gen_voice',
     type: 'voice',
     endpoint: '/api/generate/voice',
-    color: '#c084fc',
+    color: '#a855f7',
     hint: 'Voice overview',
     modelLabel: 'Voice Generation (qwen3-tts-flash)',
   },
@@ -251,8 +251,14 @@ export default function Chat({
   sessionId,
   isPendingSession = false,
   isMemoryless = false,
+  globalMemoryEnabled = true,
+  prefsSaving = false,
+  piTooltip = '',
+  injectMedia = null,
   onSessionCreated,
   onSessionTitleUpdate,
+  onGlobalMemoryToggle,
+  onMemorylessChange,
 }) {
   const [messages, setMessages] = useState([])
   const [input, setInput] = useState('')
@@ -268,6 +274,7 @@ export default function Chat({
   const windowRef = useRef(null)
   const textareaRef = useRef(null)
   const stickToBottomRef = useRef(true)
+  const lastInjectNonce = useRef(null)
 
   const slashMenuItems = useMemo(() => getSlashMenuItems(input), [input])
   const activeSlashCommand = useMemo(() => detectActiveSlashCommand(input), [input])
@@ -278,6 +285,8 @@ export default function Chat({
     }
     return activeSlashCommand
   }, [mediaGenType, activeSlashCommand])
+
+  const showMemorylessToggle = isPendingSession && messages.length === 0 && !sending
 
   const adjustTextareaHeight = useCallback(() => {
     const el = textareaRef.current
@@ -373,6 +382,29 @@ export default function Chat({
       cancelled = true
     }
   }, [userId, sessionId, isPendingSession])
+
+  useEffect(() => {
+    if (!injectMedia || injectMedia.nonce === lastInjectNonce.current) return
+    lastInjectNonce.current = injectMedia.nonce
+
+    const kind = injectMedia.type === 'voice' || injectMedia.type === 'audio'
+      ? 'voice'
+      : injectMedia.type
+
+    setMessages((current) => [
+      ...current,
+      {
+        role: 'assistant',
+        content: '',
+        kind: kind === 'image' || kind === 'video' ? kind : 'voice',
+        mediaUrl: kind === 'image' || kind === 'video' ? injectMedia.url : undefined,
+        audioSrc: kind === 'voice' ? injectMedia.url : undefined,
+        voiceOverview: kind === 'voice' ? injectMedia.prompt : undefined,
+        prompt: injectMedia.prompt,
+      },
+    ])
+    stickToBottomRef.current = true
+  }, [injectMedia])
 
   useEffect(() => {
     if (!stickToBottomRef.current) return
@@ -634,18 +666,79 @@ export default function Chat({
     ? models
     : [{ id: 'qwen-plus', name: 'Qwen Plus (balanced)' }]
 
+  const hasText = Boolean(input.trim())
+
   return (
-    <div className="panel">
-      {isMemoryless && (
+    <div className="chat-view">
+      <div className="chat-toolbar">
+        {mediaModelOverride ? (
+          <div
+            className={`model-select model-select--media`}
+            style={{ '--media-accent': mediaModelOverride.color }}
+            aria-live="polite"
+          >
+            <span className="model-select-media-label">{mediaModelOverride.modelLabel}</span>
+            {sending && mediaGenType ? (
+              <span className="spinner spinner-inline" aria-hidden="true" />
+            ) : null}
+          </div>
+        ) : (
+          <select
+            className="model-select"
+            value={selectedModel}
+            onChange={(e) => setSelectedModel(e.target.value)}
+            disabled={sending}
+            aria-label="Chat model"
+            title="Chat model"
+          >
+            {modelOptions.map((model) => (
+              <option key={model.id} value={model.id}>
+                {model.name}
+              </option>
+            ))}
+          </select>
+        )}
+
+        <label
+          className={`pi-switch${isMemoryless ? ' disabled' : ''}`}
+          title={piTooltip}
+        >
+          <input
+            type="checkbox"
+            checked={globalMemoryEnabled}
+            onChange={onGlobalMemoryToggle}
+            disabled={prefsSaving || isMemoryless}
+            aria-label="Personal Intelligence"
+          />
+          <span className={`pi-switch-track ${globalMemoryEnabled ? 'on' : 'off'}`}>
+            {globalMemoryEnabled ? 'ON' : 'OFF'}
+          </span>
+          <span className="pi-switch-label">Personal Intelligence</span>
+        </label>
+
+        <div className="chat-toolbar-spacer" />
+
+        {showMemorylessToggle && (
+          <label
+            className={`memoryless-toggle${isMemoryless ? ' active' : ''}`}
+            title="Private chat — nothing will be stored in long-term memory"
+          >
+            <input
+              type="checkbox"
+              checked={isMemoryless}
+              onChange={(e) => onMemorylessChange?.(e.target.checked)}
+            />
+            Memoryless
+          </label>
+        )}
+      </div>
+
+      {isMemoryless && !showMemorylessToggle && (
         <div className="memoryless-banner">
           MemoryLess Session – nothing will be remembered.
         </div>
       )}
-      <div className="chat-hints">
-        Type <code>/</code> for commands — <span className="slash-hint slash-hint--imagine">/imagine</span>,{' '}
-        <span className="slash-hint slash-hint--video">/gen_video</span>,{' '}
-        <span className="slash-hint slash-hint--voice">/gen_voice</span>
-      </div>
+
       <div className="chat-window-wrap">
         <div className="chat-window" ref={windowRef}>
           {loadingHistory && (
@@ -655,7 +748,7 @@ export default function Chat({
             </div>
           )}
           {!loadingHistory && messages.length === 0 && !sending && (
-            <div className="empty">Say hello — I&apos;ll remember what matters.</div>
+            <div className="empty">Ask anything — I&apos;ll remember what matters.</div>
           )}
           {!loadingHistory &&
             messages.map((m, i) => {
@@ -726,86 +819,84 @@ export default function Chat({
         )}
       </div>
 
-      <div className="composer">
-        {mediaModelOverride ? (
-          <div
-            className={`model-select model-select--media model-select--fade-in${
-              mediaModelOverride.color ? ` model-select--${mediaModelOverride.type}` : ''
-            }`}
-            style={{ '--media-accent': mediaModelOverride.color }}
-            aria-live="polite"
-          >
-            <span className="model-select-media-label">{mediaModelOverride.modelLabel}</span>
-            {sending && mediaGenType ? (
-              <span className="spinner spinner-inline model-select-spinner" aria-hidden="true" />
-            ) : null}
-          </div>
-        ) : (
-          <select
-            className="model-select"
-            value={selectedModel}
-            onChange={(e) => setSelectedModel(e.target.value)}
-            disabled={sending}
-            aria-label="Chat model"
-            title="Chat model"
-          >
-            {modelOptions.map((model) => (
-              <option key={model.id} value={model.id}>
-                {model.name}
-              </option>
-            ))}
-          </select>
-        )}
+      <div className="omni-wrap">
+        <div className="omni-bar">
+          <button type="button" className="omni-plus" aria-label="Attachments" tabIndex={-1}>
+            +
+          </button>
 
-        <div className="composer-input-area">
-          {slashMenuOpen && slashMenuItems.length > 0 && (
-            <ul className="slash-menu" role="listbox" aria-label="Slash commands">
-              {slashMenuItems.map((cmd, index) => (
-                <li key={cmd.prefix}>
-                  <button
-                    type="button"
-                    role="option"
-                    aria-selected={index === slashHighlight}
-                    className={`slash-menu-item${index === slashHighlight ? ' active' : ''}`}
-                    style={{ '--cmd-color': cmd.color }}
-                    onMouseDown={(e) => {
-                      e.preventDefault()
-                      insertSlashCommand(cmd)
-                    }}
-                  >
-                    <span className="slash-menu-cmd">{cmd.prefix}</span>
-                    <span className="slash-menu-hint">{cmd.hint}</span>
-                  </button>
-                </li>
-              ))}
-            </ul>
-          )}
-
-          <div className="composer-input-wrap">
-            {inputHighlight && (
-              <div className="composer-input-mirror" aria-hidden="true">
-                <span style={{ color: inputHighlight.color }}>{inputHighlight.command}</span>
-                <span>{inputHighlight.rest}</span>
-              </div>
+          <div className="omni-input-area">
+            {slashMenuOpen && slashMenuItems.length > 0 && (
+              <ul className="slash-menu" role="listbox" aria-label="Slash commands">
+                {slashMenuItems.map((cmd, index) => (
+                  <li key={cmd.prefix}>
+                    <button
+                      type="button"
+                      role="option"
+                      aria-selected={index === slashHighlight}
+                      className={`slash-menu-item${index === slashHighlight ? ' active' : ''}`}
+                      style={{ '--cmd-color': cmd.color }}
+                      onMouseDown={(e) => {
+                        e.preventDefault()
+                        insertSlashCommand(cmd)
+                      }}
+                    >
+                      <span className="slash-menu-cmd">{cmd.prefix}</span>
+                      <span className="slash-menu-hint">{cmd.hint}</span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
             )}
-            <textarea
-              ref={textareaRef}
-              className={`composer-textarea${inputHighlight ? ' composer-textarea--highlight' : ''}`}
-              value={input}
-              rows={1}
-              onChange={(e) => setInput(e.target.value)}
-              onKeyDown={onKeyDown}
-              placeholder="Type a message… (/ for commands, Shift+Enter for newline)"
-              disabled={sending || !sessionId}
-            />
+
+            <div className="composer-input-wrap">
+              {inputHighlight && (
+                <div className="composer-input-mirror" aria-hidden="true">
+                  <span style={{ color: inputHighlight.color }}>{inputHighlight.command}</span>
+                  <span>{inputHighlight.rest}</span>
+                </div>
+              )}
+              <textarea
+                ref={textareaRef}
+                className={`composer-textarea${inputHighlight ? ' composer-textarea--highlight' : ''}`}
+                value={input}
+                rows={1}
+                onChange={(e) => setInput(e.target.value)}
+                onKeyDown={onKeyDown}
+                placeholder="Ask anything or type / for commands…"
+                disabled={sending || !sessionId}
+              />
+            </div>
           </div>
+
+          <button
+            type="button"
+            className={`omni-send${hasText ? ' has-text' : ''}`}
+            onClick={send}
+            disabled={sending || !hasText || !sessionId}
+            aria-label="Send"
+            title="Send"
+          >
+            ➤
+          </button>
         </div>
 
-        <button className="btn" onClick={send} disabled={sending || !input.trim() || !sessionId}>
-          {sending ? 'Sending…' : 'Send'}
-        </button>
+        <div className="action-chips">
+          {SLASH_COMMANDS.map((cmd) => (
+            <button
+              key={cmd.prefix}
+              type="button"
+              className="action-chip"
+              style={{ '--chip-color': cmd.color }}
+              onClick={() => insertSlashCommand(cmd)}
+            >
+              {cmd.prefix}
+            </button>
+          ))}
+        </div>
+
+        {error && <div className="error">{error}</div>}
       </div>
-      {error && <div className="error">{error}</div>}
     </div>
   )
 }

@@ -57,6 +57,8 @@ export default function Auth({ onAuth, embedded = false }) {
       onAuth({
         user_id: data.user_id,
         username: data.username,
+        first_name: data.first_name || form.first_name.trim() || '',
+        last_name: data.last_name || form.last_name.trim() || '',
         global_memory_enabled: data.global_memory_enabled ?? true,
         persona: data.persona ?? null,
       })
