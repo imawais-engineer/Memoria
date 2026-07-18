@@ -49,6 +49,18 @@ const SLASH_COMMANDS = [
   },
 ]
 
+function parseCreateTask(text) {
+  const trimmed = text.trim()
+  if (!trimmed.startsWith('/create_task')) return null
+  const title = trimmed.slice('/create_task'.length).trim()
+  if (!title) return null
+  return title
+}
+
+function isShowTasksCommand(text) {
+  return text.trim() === '/show_tasks'
+}
+
 function parseMediaCommand(text) {
   const trimmed = text.trim()
   for (const command of SLASH_COMMANDS) {
@@ -259,17 +271,20 @@ export default function Chat({
   isPendingSession = false,
   isMemoryless = false,
   globalMemoryEnabled = true,
+  defaultChatModel = 'qwen-plus',
   prefsSaving = false,
   sidebarOpen = true,
+  creatingChat = false,
   injectMedia = null,
   onSessionCreated,
   onSessionTitleUpdate,
   onGlobalMemoryToggle,
   onMemorylessChange,
+  onNewChat,
 }) {
   const [messages, setMessages] = useState([])
   const [input, setInput] = useState('')
-  const [selectedModel, setSelectedModel] = useState('qwen-plus')
+  const [selectedModel, setSelectedModel] = useState(defaultChatModel)
   const [models, setModels] = useState([])
   const [sending, setSending] = useState(false)
   const [mediaGenType, setMediaGenType] = useState(null)
@@ -295,6 +310,11 @@ export default function Chat({
   }, [mediaGenType, activeSlashCommand])
 
   const showMemorylessToggle = isPendingSession && messages.length === 0 && !sending
+  const isStreaming = messages.some((m) => m.streaming)
+
+  useEffect(() => {
+    setSelectedModel(defaultChatModel || 'qwen-plus')
+  }, [defaultChatModel])
 
   useEffect(() => {
     if (!infoDialog) return undefined
@@ -596,35 +616,140 @@ export default function Chat({
     }
   }
 
-  async function sendChatMessage(text) {
-    try {
-      const res = await fetch('/chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          user_id: userId,
-          message: text,
-          session_id: sessionId,
-          is_memoryless: isMemoryless,
-          model: selectedModel,
-        }),
-      })
-      if (!res.ok) throw new Error(`Backend returned ${res.status}`)
-      const data = await res.json()
-      setMessages((m) => [
-        ...m,
-        {
-          role: 'assistant',
-          content: data.reply,
-          kind: 'text',
-          memory_ids: data.memory_ids || [],
-          feedback: null,
-        },
-      ])
-      applySessionResponse(data)
-    } catch (e) {
-      setError(e.message || 'Failed to send message')
+  async function sendChatMessageStream(text) {
+    const res = await fetch('/chat/stream', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        user_id: userId,
+        message: text,
+        session_id: sessionId,
+        is_memoryless: isMemoryless,
+        model: selectedModel,
+      }),
+    })
+    if (!res.ok) throw new Error(`Backend returned ${res.status}`)
+
+    setMessages((m) => [
+      ...m,
+      {
+        role: 'assistant',
+        content: '',
+        kind: 'text',
+        memory_ids: [],
+        feedback: null,
+        streaming: true,
+      },
+    ])
+
+    const reader = res.body?.getReader()
+    if (!reader) throw new Error('Streaming not supported')
+
+    const decoder = new TextDecoder()
+    let buffer = ''
+    let finalData = null
+
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) break
+      buffer += decoder.decode(value, { stream: true })
+      const parts = buffer.split('\n\n')
+      buffer = parts.pop() || ''
+
+      for (const part of parts) {
+        const line = part.trim()
+        if (!line.startsWith('data: ')) continue
+        let data
+        try {
+          data = JSON.parse(line.slice(6))
+        } catch {
+          continue
+        }
+        if (data.error) throw new Error(data.error)
+        if (data.token) {
+          setMessages((current) => {
+            const copy = [...current]
+            const last = copy[copy.length - 1]
+            if (last?.role === 'assistant' && last.streaming) {
+              copy[copy.length - 1] = {
+                ...last,
+                content: last.content + data.token,
+              }
+            }
+            return copy
+          })
+        }
+        if (data.done) {
+          finalData = data
+        }
+      }
     }
+
+    setMessages((current) => {
+      const copy = [...current]
+      const last = copy[copy.length - 1]
+      if (last?.role === 'assistant' && last.streaming) {
+        copy[copy.length - 1] = {
+          ...last,
+          streaming: false,
+          memory_ids: finalData?.memory_ids || [],
+        }
+      }
+      return copy
+    })
+
+    if (finalData) {
+      applySessionResponse(finalData)
+    }
+  }
+
+  async function sendCreateTask(title) {
+    const res = await fetch('/api/tasks', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ user_id: userId, title }),
+    })
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}))
+      throw new Error(data.detail || `Failed to create task (${res.status})`)
+    }
+    const task = await res.json()
+    setMessages((current) => [
+      ...current,
+      {
+        role: 'assistant',
+        content: `✅ Task created: **${task.title}**`,
+        kind: 'text',
+        memory_ids: [],
+        feedback: null,
+      },
+    ])
+  }
+
+  async function sendShowTasks() {
+    const res = await fetch(`/api/tasks?user_id=${encodeURIComponent(userId)}`)
+    if (!res.ok) throw new Error(`Failed to load tasks (${res.status})`)
+    const tasks = await res.json()
+    let content
+    if (!tasks.length) {
+      content = 'You have no tasks yet. Create one with `/create_task Buy groceries`.'
+    } else {
+      const lines = tasks.map((task) => {
+        const mark = task.status === 'completed' ? '✓' : '○'
+        return `- ${mark} ${task.title}`
+      })
+      content = `**Your tasks:**\n\n${lines.join('\n')}`
+    }
+    setMessages((current) => [
+      ...current,
+      {
+        role: 'assistant',
+        content,
+        kind: 'text',
+        memory_ids: [],
+        feedback: null,
+      },
+    ])
   }
 
   async function send() {
@@ -637,8 +762,39 @@ export default function Chat({
     stickToBottomRef.current = true
     setShowScrollDown(false)
 
+    const createTaskTitle = parseCreateTask(text)
+    if (createTaskTitle) {
+      setMessages((m) => [...m, { role: 'user', content: text, kind: 'text' }])
+      setSending(true)
+      try {
+        await sendCreateTask(createTaskTitle)
+      } catch (e) {
+        setError(e.message || 'Failed to create task')
+      } finally {
+        setSending(false)
+      }
+      return
+    }
+
+    if (isShowTasksCommand(text)) {
+      setMessages((m) => [...m, { role: 'user', content: text, kind: 'text' }])
+      setSending(true)
+      try {
+        await sendShowTasks()
+      } catch (e) {
+        setError(e.message || 'Failed to load tasks')
+      } finally {
+        setSending(false)
+      }
+      return
+    }
+
     const mediaCommand = parseMediaCommand(text)
     if (mediaCommand) {
+      if (isMemoryless) {
+        setError('Media generation is disabled in MemoryLess sessions.')
+        return
+      }
       setSending(true)
       setMediaGenType(mediaCommand.type)
       try {
@@ -653,7 +809,10 @@ export default function Chat({
     setMessages((m) => [...m, { role: 'user', content: text, kind: 'text' }])
     setSending(true)
     try {
-      await sendChatMessage(text)
+      await sendChatMessageStream(text)
+    } catch (e) {
+      setMessages((m) => m.filter((item) => !item.streaming))
+      setError(e.message || 'Failed to send message')
     } finally {
       setSending(false)
     }
@@ -699,26 +858,38 @@ export default function Chat({
     <div className="chat-view">
       <div className={`chat-toolbar${sidebarOpen ? '' : ' chat-toolbar--sidebar-closed'}`}>
         <div className="chat-toolbar-left">
-          {sidebarOpen && (
-            mediaModelOverride ? (
-              <div
-                className="model-select model-select--media"
-                style={{ '--media-accent': mediaModelOverride.color }}
-                aria-live="polite"
+          {!sidebarOpen && (
+            <div className="collapsed-top-bar">
+              <span className="collapsed-brand">Memoria</span>
+              <button
+                type="button"
+                className="collapsed-new-chat"
+                onClick={onNewChat}
+                disabled={creatingChat}
               >
-                <span className="model-select-media-label">{mediaModelOverride.modelLabel}</span>
-                {sending && mediaGenType ? (
-                  <span className="spinner spinner-inline" aria-hidden="true" />
-                ) : null}
-              </div>
-            ) : (
-              <ModelDropdown
-                options={modelOptions}
-                value={selectedModel}
-                onChange={setSelectedModel}
-                disabled={sending}
-              />
-            )
+                {creatingChat ? 'Starting…' : '+ New Chat'}
+              </button>
+            </div>
+          )}
+
+          {mediaModelOverride ? (
+            <div
+              className="model-select model-select--media"
+              style={{ '--media-accent': mediaModelOverride.color }}
+              aria-live="polite"
+            >
+              <span className="model-select-media-label">{mediaModelOverride.modelLabel}</span>
+              {sending && mediaGenType ? (
+                <span className="spinner spinner-inline" aria-hidden="true" />
+              ) : null}
+            </div>
+          ) : (
+            <ModelDropdown
+              options={modelOptions}
+              value={selectedModel}
+              onChange={setSelectedModel}
+              disabled={sending}
+            />
           )}
         </div>
 
@@ -794,7 +965,10 @@ export default function Chat({
                 m.role === 'assistant' &&
                 m.kind !== 'voice-status' &&
                 copyText.trim()
-              const showFeedback = m.role === 'assistant' && m.memory_ids?.length > 0
+              const showFeedback =
+                m.role === 'assistant' &&
+                m.memory_ids?.length > 0 &&
+                !m.streaming
 
               return (
                 <div
@@ -836,7 +1010,7 @@ export default function Chat({
                 </div>
               )
             })}
-          {sending && !messages.some((m) => m.kind === 'voice-status') && !mediaGenType && (
+          {sending && !isStreaming && !messages.some((m) => m.kind === 'voice-status') && !mediaGenType && (
             <div className="bubble assistant typing">
               <span className="spinner spinner-inline" aria-hidden="true" />
               Thinking…
@@ -923,9 +1097,16 @@ export default function Chat({
             <button
               key={cmd.prefix}
               type="button"
-              className="action-chip"
+              className={`action-chip${isMemoryless ? ' disabled' : ''}`}
               style={{ '--chip-color': cmd.color }}
-              onClick={() => insertSlashCommand(cmd)}
+              onClick={() => {
+                if (isMemoryless) {
+                  setError('Media generation is disabled in MemoryLess sessions.')
+                  return
+                }
+                insertSlashCommand(cmd)
+              }}
+              disabled={isMemoryless}
             >
               {cmd.prefix}
             </button>

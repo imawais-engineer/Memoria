@@ -12,10 +12,18 @@ import json
 import logging
 import uuid
 
+from collections.abc import AsyncIterator
+
 import redis.asyncio as redis
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.dashscope_client import ALLOWED_CHAT_MODELS, DEFAULT_CHAT_MODEL, call_qwen_chat, get_embedding
+from app.core.dashscope_client import (
+    ALLOWED_CHAT_MODELS,
+    DEFAULT_CHAT_MODEL,
+    call_qwen_chat,
+    get_embedding,
+    stream_qwen_chat,
+)
 from app.memory.models import Memory
 from app.models.chat_message import ChatMessage
 from app.models.user import User
@@ -195,6 +203,224 @@ async def _run_reflection_background(user_id: str) -> None:
         logger.exception("Background reflection failed for user_id=%s", user_id)
 
 
+async def _prepare_chat_turn(
+    user_id: str,
+    user_message: str,
+    session_id: str | None,
+    *,
+    is_memoryless: bool,
+    db_session: AsyncSession,
+    redis_client: redis.Redis,
+) -> dict:
+    """Build chat context for a turn. May include an early ``reply`` for slash help."""
+
+    if not session_id:
+        session_id = str(uuid.uuid4())
+
+    session = await ensure_session_exists(
+        session_id,
+        user_id,
+        is_memoryless=is_memoryless,
+        db=db_session,
+    )
+    is_memoryless = session.is_memoryless
+
+    if user_message.strip() == "/":
+        await touch_session_on_message(session_id, user_message, db_session)
+        return {
+            "early_reply": SLASH_HELP_REPLY,
+            "session_id": session_id,
+            "memory_ids": [],
+            "title": session.title if session.title != "New Chat" else None,
+        }
+
+    session_title = await touch_session_on_message(session_id, user_message, db_session)
+    global_memory_enabled = await _get_global_memory_enabled(user_id, db_session)
+    user_persona = await _get_user_persona(user_id, db_session)
+    session_key = f"session:{session_id}"
+
+    raw_history = await redis_client.lrange(session_key, -SESSION_MAX_MESSAGES, -1)
+    history: list[dict] = []
+    for item in raw_history:
+        try:
+            history.append(json.loads(item))
+        except (json.JSONDecodeError, TypeError):
+            continue
+
+    memory_context, memory_ids = await retrieve_context_and_ids(
+        user_id,
+        user_message,
+        max_tokens=6000,
+        db_session=db_session,
+        session_id=session_id,
+        is_memoryless=is_memoryless,
+        global_memory_enabled=global_memory_enabled,
+    )
+    reflection_text = (
+        None
+        if is_memoryless
+        else await get_latest_reflection(user_id, db_session)
+    )
+
+    session_summary = await redis_client.get(f"{session_key}:summary")
+    memory_display = memory_context or "(none)"
+    system_prompt = (
+        f"{_memory_mode_label(is_memoryless, global_memory_enabled)}\n\n"
+        + SYSTEM_PROMPT_TEMPLATE.format(memory_context=memory_display)
+    )
+    if reflection_text:
+        system_prompt += f"\n\nLatest reflection about the user: {reflection_text}"
+    system_prompt += f"\n\n{format_persona_prompt(user_persona)}"
+    if session_summary:
+        system_prompt = (
+            f"Summary of the conversation so far: {session_summary}\n\n"
+            + system_prompt
+        )
+
+    messages = (
+        [{"role": "system", "content": system_prompt}]
+        + history
+        + [{"role": "user", "content": user_message}]
+    )
+
+    return {
+        "session_id": session_id,
+        "session_key": session_key,
+        "session_title": session_title,
+        "is_memoryless": is_memoryless,
+        "memory_ids": memory_ids,
+        "messages": messages,
+        "user_message": user_message,
+        "user_id": user_id,
+    }
+
+
+async def _finalize_chat_turn(
+    *,
+    user_id: str,
+    user_message: str,
+    reply: str,
+    session_id: str,
+    session_key: str,
+    is_memoryless: bool,
+    db_session: AsyncSession,
+    redis_client: redis.Redis,
+) -> None:
+    """Persist chat side effects after the assistant reply is complete."""
+
+    if not is_memoryless:
+        try:
+            await _archive_chat_messages(session_id, user_message, reply, db_session)
+        except Exception:  # noqa: BLE001 - archive must not break chat
+            logger.exception(
+                "Failed to archive chat messages for session_id=%s", session_id
+            )
+
+    await redis_client.rpush(
+        session_key,
+        json.dumps({"role": "user", "content": user_message}),
+        json.dumps({"role": "assistant", "content": reply}),
+    )
+    await redis_client.ltrim(session_key, -SESSION_MAX_MESSAGES, -1)
+    await redis_client.expire(session_key, SESSION_TTL_SECONDS)
+
+    turns = await redis_client.incr(f"{session_key}:turns")
+    await redis_client.expire(f"{session_key}:turns", SESSION_TTL_SECONDS)
+    if not is_memoryless and (
+        _wants_recap(user_message) or turns % SUMMARY_EVERY_N_TURNS == 0
+    ):
+        try:
+            raw_latest = await redis_client.lrange(
+                session_key, -SESSION_MAX_MESSAGES, -1
+            )
+            latest_history = [json.loads(item) for item in raw_latest]
+            summary = await _generate_session_summary(
+                latest_history, session_key, redis_client
+            )
+            await _store_summary_memory(summary, user_id, session_id, db_session)
+        except Exception:  # noqa: BLE001 - summary is best-effort
+            logger.exception("Session summary generation failed")
+
+    if not is_memoryless:
+        message_id = str(uuid.uuid4())
+        try:
+            from celery_app.tasks import extract_memories_task
+
+            extract_memories_task.delay(
+                conversation_text=user_message,
+                user_id=user_id,
+                message_id=message_id,
+                session_id=session_id,
+                is_memoryless=is_memoryless,
+            )
+        except Exception:  # noqa: BLE001 - enqueue failure must not break the reply
+            logger.exception("Failed to enqueue extract_memories_task")
+
+    user_msg_count = await redis_client.incr(f"{session_key}:user_msg_count")
+    await redis_client.expire(f"{session_key}:user_msg_count", SESSION_TTL_SECONDS)
+    if not is_memoryless and user_msg_count % REFLECTION_EVERY_N_USER_MESSAGES == 0:
+        asyncio.create_task(_run_reflection_background(user_id))
+
+
+async def handle_message_stream(
+    user_id: str,
+    user_message: str,
+    session_id: str | None = None,
+    *,
+    is_memoryless: bool = False,
+    model: str = DEFAULT_CHAT_MODEL,
+    db_session: AsyncSession,
+    redis_client: redis.Redis,
+) -> AsyncIterator[dict]:
+    """Stream chat tokens, then yield a final done event."""
+
+    if model not in ALLOWED_CHAT_MODELS:
+        model = DEFAULT_CHAT_MODEL
+
+    prepared = await _prepare_chat_turn(
+        user_id,
+        user_message,
+        session_id,
+        is_memoryless=is_memoryless,
+        db_session=db_session,
+        redis_client=redis_client,
+    )
+
+    if "early_reply" in prepared:
+        yield {"type": "token", "token": prepared["early_reply"]}
+        yield {
+            "type": "done",
+            "session_id": prepared["session_id"],
+            "memory_ids": prepared["memory_ids"],
+            "title": prepared.get("title"),
+        }
+        return
+
+    reply_parts: list[str] = []
+    async for token in stream_qwen_chat(prepared["messages"], model=model):
+        reply_parts.append(token)
+        yield {"type": "token", "token": token}
+
+    reply = "".join(reply_parts)
+    await _finalize_chat_turn(
+        user_id=prepared["user_id"],
+        user_message=prepared["user_message"],
+        reply=reply,
+        session_id=prepared["session_id"],
+        session_key=prepared["session_key"],
+        is_memoryless=prepared["is_memoryless"],
+        db_session=db_session,
+        redis_client=redis_client,
+    )
+
+    yield {
+        "type": "done",
+        "session_id": prepared["session_id"],
+        "memory_ids": prepared["memory_ids"],
+        "title": prepared["session_title"],
+    }
+
+
 async def handle_message(
     user_id: str,
     user_message: str,
@@ -213,144 +439,38 @@ async def handle_message(
     if model not in ALLOWED_CHAT_MODELS:
         model = DEFAULT_CHAT_MODEL
 
-    if not session_id:
-        session_id = str(uuid.uuid4())
-
-    session = await ensure_session_exists(
-        session_id,
-        user_id,
-        is_memoryless=is_memoryless,
-        db=db_session,
-    )
-    is_memoryless = session.is_memoryless
-
-    if user_message.strip() == "/":
-        await touch_session_on_message(session_id, user_message, db_session)
-        return {
-            "reply": SLASH_HELP_REPLY,
-            "session_id": session_id,
-            "memory_ids": [],
-            "title": session.title if session.title != "New Chat" else None,
-        }
-
-    session_title = await touch_session_on_message(session_id, user_message, db_session)
-    global_memory_enabled = await _get_global_memory_enabled(user_id, db_session)
-    user_persona = await _get_user_persona(user_id, db_session)
-
-    session_key = f"session:{session_id}"
-
-    # 1. Load recent session history (list of {role, content}).
-    raw_history = await redis_client.lrange(session_key, -SESSION_MAX_MESSAGES, -1)
-    history: list[dict] = []
-    for item in raw_history:
-        try:
-            history.append(json.loads(item))
-        except (json.JSONDecodeError, TypeError):
-            continue
-
-    # 2. Retrieve long-term memory context and latest reflection.
-    memory_context, memory_ids = await retrieve_context_and_ids(
+    prepared = await _prepare_chat_turn(
         user_id,
         user_message,
-        max_tokens=6000,
-        db_session=db_session,
-        session_id=session_id,
+        session_id,
         is_memoryless=is_memoryless,
-        global_memory_enabled=global_memory_enabled,
-    )
-    reflection_text = (
-        None
-        if is_memoryless
-        else await get_latest_reflection(user_id, db_session)
+        db_session=db_session,
+        redis_client=redis_client,
     )
 
-    # 3-4. Build the message list: system prompt + history + current message.
-    # Prepend the rolling session summary (if any) so context survives trimming.
-    session_summary = await redis_client.get(f"{session_key}:summary")
-    memory_display = memory_context or "(none)"
-    system_prompt = (
-        f"{_memory_mode_label(is_memoryless, global_memory_enabled)}\n\n"
-        + SYSTEM_PROMPT_TEMPLATE.format(memory_context=memory_display)
+    if "early_reply" in prepared:
+        return {
+            "reply": prepared["early_reply"],
+            "session_id": prepared["session_id"],
+            "memory_ids": prepared["memory_ids"],
+            "title": prepared.get("title"),
+        }
+
+    reply = await call_qwen_chat(prepared["messages"], model=model)
+    await _finalize_chat_turn(
+        user_id=prepared["user_id"],
+        user_message=prepared["user_message"],
+        reply=reply,
+        session_id=prepared["session_id"],
+        session_key=prepared["session_key"],
+        is_memoryless=prepared["is_memoryless"],
+        db_session=db_session,
+        redis_client=redis_client,
     )
-    if reflection_text:
-        system_prompt += (
-            f"\n\nLatest reflection about the user: {reflection_text}"
-        )
-    system_prompt += f"\n\n{format_persona_prompt(user_persona)}"
-    if session_summary:
-        system_prompt = (
-            f"Summary of the conversation so far: {session_summary}\n\n"
-            + system_prompt
-        )
-    messages = (
-        [{"role": "system", "content": system_prompt}]
-        + history
-        + [{"role": "user", "content": user_message}]
-    )
-
-    # 5. Call Qwen for the assistant reply.
-    reply = await call_qwen_chat(messages, model=model)
-
-    # 5b. Archive the exchange for on-demand deep recall (non-MemoryLess only).
-    if not is_memoryless:
-        try:
-            await _archive_chat_messages(session_id, user_message, reply, db_session)
-        except Exception:  # noqa: BLE001 - archive must not break chat
-            logger.exception("Failed to archive chat messages for session_id=%s", session_id)
-
-    # 6. Persist the exchange to Redis, trimmed to the last N messages.
-    await redis_client.rpush(
-        session_key,
-        json.dumps({"role": "user", "content": user_message}),
-        json.dumps({"role": "assistant", "content": reply}),
-    )
-    await redis_client.ltrim(session_key, -SESSION_MAX_MESSAGES, -1)
-    await redis_client.expire(session_key, SESSION_TTL_SECONDS)
-
-    # 6b. Every Nth turn (or on explicit recap), refresh the session summary in
-    # Redis and persist it as an episodic memory for cross-session continuity.
-    turns = await redis_client.incr(f"{session_key}:turns")
-    await redis_client.expire(f"{session_key}:turns", SESSION_TTL_SECONDS)
-    if not is_memoryless and (
-        _wants_recap(user_message) or turns % SUMMARY_EVERY_N_TURNS == 0
-    ):
-        try:
-            raw_latest = await redis_client.lrange(
-                session_key, -SESSION_MAX_MESSAGES, -1
-            )
-            latest_history = [json.loads(item) for item in raw_latest]
-            summary = await _generate_session_summary(
-                latest_history, session_key, redis_client
-            )
-            await _store_summary_memory(summary, user_id, session_id, db_session)
-        except Exception:  # noqa: BLE001 - summary is best-effort
-            logger.exception("Session summary generation failed")
-
-    # 7. Fire-and-forget background memory extraction from this exchange.
-    if not is_memoryless:
-        message_id = str(uuid.uuid4())
-        try:
-            from celery_app.tasks import extract_memories_task
-
-            extract_memories_task.delay(
-                conversation_text=user_message,
-                user_id=user_id,
-                message_id=message_id,
-                session_id=session_id,
-                is_memoryless=is_memoryless,
-            )
-        except Exception:  # noqa: BLE001 - enqueue failure must not break the reply
-            logger.exception("Failed to enqueue extract_memories_task")
-
-    # 8. Every 10th user message, fire-and-forget reflective memory synthesis.
-    user_msg_count = await redis_client.incr(f"{session_key}:user_msg_count")
-    await redis_client.expire(f"{session_key}:user_msg_count", SESSION_TTL_SECONDS)
-    if not is_memoryless and user_msg_count % REFLECTION_EVERY_N_USER_MESSAGES == 0:
-        asyncio.create_task(_run_reflection_background(user_id))
 
     return {
         "reply": reply,
-        "session_id": session_id,
-        "memory_ids": memory_ids,
-        "title": session_title,
+        "session_id": prepared["session_id"],
+        "memory_ids": prepared["memory_ids"],
+        "title": prepared["session_title"],
     }

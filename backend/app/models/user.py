@@ -41,6 +41,9 @@ class User(Base):
     max_videos: Mapped[int] = mapped_column(
         Integer, nullable=False, default=2, server_default=text("2")
     )
+    default_chat_model: Mapped[str] = mapped_column(
+        String, nullable=False, default="qwen-plus", server_default=text("'qwen-plus'")
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )

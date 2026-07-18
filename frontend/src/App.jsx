@@ -2,10 +2,16 @@ import { useCallback, useEffect, useState } from 'react'
 import { BrowserRouter, Navigate, Route, Routes, useNavigate } from 'react-router-dom'
 import Auth from './components/Auth.jsx'
 import Chat from './components/Chat.jsx'
+import FeedbackPage from './components/FeedbackPage.jsx'
+import HelpPage from './components/HelpPage.jsx'
 import Landing from './components/Landing.jsx'
+import MediaPage from './components/MediaPage.jsx'
+import MemorizePage from './components/MemorizePage.jsx'
 import MemoryGraph from './components/MemoryGraph.jsx'
 import Persona from './components/Persona.jsx'
+import SettingsPage from './components/SettingsPage.jsx'
 import Sidebar from './components/Sidebar.jsx'
+import TasksPage from './components/TasksPage.jsx'
 
 // Fixed demo token expected by the backend for destructive actions.
 export const DEMO_TOKEN = 'memoria-demo-token'
@@ -88,6 +94,7 @@ function MainApp({ auth, onAuth, onLogout }) {
   const [sessionsError, setSessionsError] = useState('')
   const [creatingChat, setCreatingChat] = useState(false)
   const [globalMemoryEnabled, setGlobalMemoryEnabled] = useState(true)
+  const [defaultChatModel, setDefaultChatModel] = useState('qwen-plus')
   const [persona, setPersona] = useState(null)
   const [prefsSaving, setPrefsSaving] = useState(false)
   const [sidebarOpen, setSidebarOpen] = useState(loadSidebarOpen)
@@ -112,12 +119,14 @@ function MainApp({ auth, onAuth, onLogout }) {
       if (!res.ok) return
       const data = await res.json()
       setGlobalMemoryEnabled(data.global_memory_enabled)
+      setDefaultChatModel(data.default_chat_model || 'qwen-plus')
       setPersona(data.persona ?? null)
       onAuth({
         ...auth,
         user_id: userId,
         username: auth.username,
         global_memory_enabled: data.global_memory_enabled,
+        default_chat_model: data.default_chat_model,
         persona: data.persona,
       })
     } catch {
@@ -127,6 +136,7 @@ function MainApp({ auth, onAuth, onLogout }) {
 
   useEffect(() => {
     setGlobalMemoryEnabled(auth.global_memory_enabled ?? true)
+    setDefaultChatModel(auth.default_chat_model || 'qwen-plus')
     fetchPreferences()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userId])
@@ -366,6 +376,18 @@ function MainApp({ auth, onAuth, onLogout }) {
     })
   }, [auth, onAuth])
 
+  const handleSettingsSaved = useCallback((data) => {
+    setGlobalMemoryEnabled(data.global_memory_enabled)
+    setDefaultChatModel(data.default_chat_model || 'qwen-plus')
+    setPersona(data.persona ?? null)
+    onAuth({
+      ...auth,
+      global_memory_enabled: data.global_memory_enabled,
+      default_chat_model: data.default_chat_model,
+      persona: data.persona,
+    })
+  }, [auth, onAuth])
+
   const disableGlobalMemory = useCallback(async () => {
     if (!globalMemoryEnabled || prefsSaving) return
     setPrefsSaving(true)
@@ -443,17 +465,68 @@ function MainApp({ auth, onAuth, onLogout }) {
     userId,
   ])
 
-  const handleOpenMedia = useCallback((asset) => {
-    setView('chat')
-    if (!activeSessionId) return
-    setInjectMedia({
-      id: asset.id,
-      type: asset.type,
-      url: asset.url,
-      prompt: asset.prompt,
-      nonce: Date.now(),
-    })
-  }, [activeSessionId])
+  function renderMainView() {
+    switch (view) {
+      case 'chat':
+        return (
+          <Chat
+            userId={userId}
+            sessionId={activeSessionId}
+            isPendingSession={isPendingSession}
+            isMemoryless={isMemoryless}
+            globalMemoryEnabled={globalMemoryEnabled}
+            defaultChatModel={defaultChatModel}
+            prefsSaving={prefsSaving}
+            sidebarOpen={sidebarOpen}
+            creatingChat={creatingChat}
+            injectMedia={injectMedia}
+            onSessionCreated={handleSessionCreated}
+            onSessionTitleUpdate={handleSessionTitleUpdate}
+            onGlobalMemoryToggle={handleGlobalMemoryToggle}
+            onMemorylessChange={handleMemorylessChange}
+            onNewChat={handleNewChat}
+          />
+        )
+      case 'memory':
+        return (
+          <MemoryGraph
+            userId={userId}
+            username={auth?.username}
+            sessionId={activeSessionId}
+          />
+        )
+      case 'persona':
+        return (
+          <Persona
+            userId={auth.user_id}
+            persona={persona}
+            onSaved={handlePersonaSaved}
+          />
+        )
+      case 'memorize':
+        return <MemorizePage userId={userId} />
+      case 'media':
+        return <MediaPage userId={userId} />
+      case 'tasks':
+        return <TasksPage userId={userId} />
+      case 'settings':
+        return (
+          <SettingsPage
+            userId={userId}
+            globalMemoryEnabled={globalMemoryEnabled}
+            defaultChatModel={defaultChatModel}
+            persona={persona}
+            onSaved={handleSettingsSaved}
+          />
+        )
+      case 'feedback':
+        return <FeedbackPage userId={userId} />
+      case 'help':
+        return <HelpPage />
+      default:
+        return null
+    }
+  }
 
   useEffect(() => {
     if (!activeSession?.is_memoryless || !activeSessionId || isPendingSession) {
@@ -498,40 +571,12 @@ function MainApp({ auth, onAuth, onLogout }) {
           onNavigate={setView}
           onDelete={handleDeleteSession}
           onRename={handleRenameSession}
-          onOpenMedia={handleOpenMedia}
           onLogout={onLogout}
         />
 
-        <main className="canvas">
+        <main className={`canvas${sidebarOpen ? '' : ' canvas--sidebar-closed'}`}>
           <div className="canvas-body">
-            {view === 'chat' ? (
-              <Chat
-                userId={userId}
-                sessionId={activeSessionId}
-                isPendingSession={isPendingSession}
-                isMemoryless={isMemoryless}
-                globalMemoryEnabled={globalMemoryEnabled}
-                prefsSaving={prefsSaving}
-                sidebarOpen={sidebarOpen}
-                injectMedia={injectMedia}
-                onSessionCreated={handleSessionCreated}
-                onSessionTitleUpdate={handleSessionTitleUpdate}
-                onGlobalMemoryToggle={handleGlobalMemoryToggle}
-                onMemorylessChange={handleMemorylessChange}
-              />
-            ) : view === 'memory' ? (
-              <MemoryGraph
-                userId={userId}
-                username={auth?.username}
-                sessionId={activeSessionId}
-              />
-            ) : (
-              <Persona
-                userId={auth.user_id}
-                persona={persona}
-                onSaved={handlePersonaSaved}
-              />
-            )}
+            {renderMainView()}
           </div>
           {sessionsError && <div className="canvas-error">{sessionsError}</div>}
         </main>
@@ -561,6 +606,7 @@ export default function App() {
         current?.user_id === user.user_id &&
         current?.username === user.username &&
         current?.global_memory_enabled === user.global_memory_enabled &&
+        current?.default_chat_model === user.default_chat_model &&
         current?.first_name === user.first_name &&
         current?.last_name === user.last_name &&
         JSON.stringify(current?.persona) === JSON.stringify(user.persona)

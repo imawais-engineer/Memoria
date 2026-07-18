@@ -20,7 +20,9 @@ from alembic import context
 from app.memory.models import Base
 from app.models.chat_message import ChatMessage  # noqa: F401
 from app.models.chat_session import ChatSession  # noqa: F401
+from app.models.contact_feedback import ContactFeedback  # noqa: F401
 from app.models.generated_asset import GeneratedAsset  # noqa: F401
+from app.models.task import Task  # noqa: F401
 from app.models.user import User  # noqa: F401
 
 # Prefer the application's configured DATABASE_URL when available so local/CI

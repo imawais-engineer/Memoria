@@ -11,6 +11,7 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.dashscope_client import ALLOWED_CHAT_MODELS, DEFAULT_CHAT_MODEL
 from app.core.database import get_db
 from app.models.user import User
 from app.schemas.persona import normalize_persona
@@ -62,20 +63,32 @@ class AuthResponse(BaseModel):
     first_name: str = ""
     last_name: str = ""
     global_memory_enabled: bool = True
+    default_chat_model: str = DEFAULT_CHAT_MODEL
     persona: PersonaOut
 
 
 class PreferencesRequest(BaseModel):
     user_id: str = Field(..., min_length=1)
     global_memory_enabled: bool | None = None
+    default_chat_model: str | None = None
     persona: PersonaIn | None = None
 
     @model_validator(mode="after")
     def validate_update_fields(self) -> "PreferencesRequest":
-        if self.global_memory_enabled is None and self.persona is None:
+        if (
+            self.global_memory_enabled is None
+            and self.persona is None
+            and self.default_chat_model is None
+        ):
             raise ValueError(
-                "At least one of global_memory_enabled or persona must be provided"
+                "At least one of global_memory_enabled, default_chat_model, "
+                "or persona must be provided"
             )
+        if (
+            self.default_chat_model is not None
+            and self.default_chat_model not in ALLOWED_CHAT_MODELS
+        ):
+            raise ValueError("Invalid default_chat_model")
         return self
 
 
@@ -83,6 +96,7 @@ class UserPreferencesOut(BaseModel):
     user_id: str
     username: str
     global_memory_enabled: bool
+    default_chat_model: str
     persona: PersonaOut
 
 
@@ -110,6 +124,7 @@ def _user_to_auth(user: User) -> AuthResponse:
         first_name=user.first_name or "",
         last_name=user.last_name or "",
         global_memory_enabled=user.global_memory_enabled,
+        default_chat_model=user.default_chat_model or DEFAULT_CHAT_MODEL,
         persona=_persona_out(user.persona),
     )
 
@@ -119,6 +134,7 @@ def _user_to_preferences(user: User) -> UserPreferencesOut:
         user_id=str(user.id),
         username=user.username,
         global_memory_enabled=user.global_memory_enabled,
+        default_chat_model=user.default_chat_model or DEFAULT_CHAT_MODEL,
         persona=_persona_out(user.persona),
     )
 
@@ -190,6 +206,8 @@ async def update_preferences(
     user = await _get_user_or_404(body.user_id, db)
     if body.global_memory_enabled is not None:
         user.global_memory_enabled = body.global_memory_enabled
+    if body.default_chat_model is not None:
+        user.default_chat_model = body.default_chat_model
     if body.persona is not None:
         user.persona = body.persona.model_dump()
     await db.commit()

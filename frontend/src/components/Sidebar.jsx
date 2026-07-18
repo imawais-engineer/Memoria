@@ -1,18 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
 
-function truncate(text, max = 42) {
-  const value = (text || '').trim()
-  if (!value) return 'Untitled'
-  return value.length > max ? `${value.slice(0, max - 1)}…` : value
-}
-
-function mediaIcon(type) {
-  if (type === 'image') return '🖼'
-  if (type === 'video') return '▶'
-  if (type === 'voice' || type === 'audio') return '🎙'
-  return '●'
-}
-
 export default function Sidebar({
   userId,
   username,
@@ -28,7 +15,6 @@ export default function Sidebar({
   onNavigate,
   onDelete,
   onRename,
-  onOpenMedia,
   onLogout,
 }) {
   const [pendingDelete, setPendingDelete] = useState(null)
@@ -37,9 +23,6 @@ export default function Sidebar({
   const [savingTitle, setSavingTitle] = useState(false)
   const [menuSessionId, setMenuSessionId] = useState(null)
   const [profileMenuOpen, setProfileMenuOpen] = useState(false)
-  const [mediaOpen, setMediaOpen] = useState(true)
-  const [assets, setAssets] = useState([])
-  const [assetsLoading, setAssetsLoading] = useState(false)
   const editInputRef = useRef(null)
 
   const recentSessions = sessions.filter((session) => !session.is_memoryless)
@@ -51,32 +34,6 @@ export default function Sidebar({
       editInputRef.current.select()
     }
   }, [editingSessionId])
-
-  useEffect(() => {
-    if (!userId || !open) return undefined
-
-    let cancelled = false
-    async function loadAssets() {
-      setAssetsLoading(true)
-      try {
-        const res = await fetch(
-          `/api/generate/assets?user_id=${encodeURIComponent(userId)}`,
-        )
-        if (!res.ok) return
-        const data = await res.json()
-        if (!cancelled) setAssets(data.assets || [])
-      } catch {
-        // media list is optional
-      } finally {
-        if (!cancelled) setAssetsLoading(false)
-      }
-    }
-
-    loadAssets()
-    return () => {
-      cancelled = true
-    }
-  }, [userId, open, sessions.length])
 
   useEffect(() => {
     function closeMenus(e) {
@@ -136,6 +93,11 @@ export default function Sidebar({
     }
   }
 
+  function navigate(view) {
+    setProfileMenuOpen(false)
+    onNavigate(view)
+  }
+
   return (
     <aside className={`sidebar${open ? '' : ' sidebar--closed'}`} aria-hidden={!open}>
       <div className="sidebar-inner">
@@ -175,48 +137,30 @@ export default function Sidebar({
           >
             Persona
           </button>
-        </nav>
-
-        <div className="sidebar-section">
           <button
             type="button"
-            className="sidebar-section-toggle"
-            onClick={() => setMediaOpen((openState) => !openState)}
-            aria-expanded={mediaOpen}
+            className={`sidebar-nav-link${activeView === 'memorize' ? ' active' : ''}`}
+            onClick={() => onNavigate('memorize')}
+          >
+            Memorize
+          </button>
+          <button
+            type="button"
+            className={`sidebar-nav-link${activeView === 'media' ? ' active' : ''}`}
+            onClick={() => onNavigate('media')}
           >
             Media
-            <span className="sidebar-section-chevron">{mediaOpen ? '▾' : '▸'}</span>
           </button>
-          {mediaOpen && (
-            <div className="sidebar-media-list">
-              {assetsLoading && <div className="sidebar-empty">Loading…</div>}
-              {!assetsLoading && assets.length === 0 && (
-                <div className="sidebar-empty">No media yet</div>
-              )}
-              {!assetsLoading &&
-                assets.slice(0, 12).map((asset) => (
-                  <button
-                    key={asset.id}
-                    type="button"
-                    className="sidebar-media-item"
-                    onClick={() => onOpenMedia?.(asset)}
-                    title={asset.prompt}
-                  >
-                    <span className="sidebar-media-thumb">
-                      {asset.type === 'image' && asset.url ? (
-                        <img src={asset.url} alt="" />
-                      ) : (
-                        mediaIcon(asset.type)
-                      )}
-                    </span>
-                    <span className="sidebar-media-title">{truncate(asset.prompt, 36)}</span>
-                  </button>
-                ))}
-            </div>
-          )}
-        </div>
+          <button
+            type="button"
+            className={`sidebar-nav-link${activeView === 'tasks' ? ' active' : ''}`}
+            onClick={() => onNavigate('tasks')}
+          >
+            Tasks
+          </button>
+        </nav>
 
-        <div className="sidebar-section" style={{ flex: 1, minHeight: 0 }}>
+        <div className="sidebar-section sidebar-chats-section">
           <div className="sidebar-section-toggle" style={{ cursor: 'default' }}>
             Recent Chats
           </div>
@@ -313,7 +257,7 @@ export default function Sidebar({
             className="sidebar-profile"
             onClick={(e) => {
               e.stopPropagation()
-              setProfileMenuOpen((open) => !open)
+              setProfileMenuOpen((openState) => !openState)
             }}
             aria-expanded={profileMenuOpen}
             aria-haspopup="menu"
@@ -329,13 +273,13 @@ export default function Sidebar({
 
           {profileMenuOpen && (
             <div className="sidebar-profile-menu" role="menu">
-              <button type="button" role="menuitem" onClick={() => setProfileMenuOpen(false)}>
+              <button type="button" role="menuitem" onClick={() => navigate('settings')}>
                 Settings
               </button>
-              <button type="button" role="menuitem" onClick={() => setProfileMenuOpen(false)}>
+              <button type="button" role="menuitem" onClick={() => navigate('help')}>
                 Help
               </button>
-              <button type="button" role="menuitem" onClick={() => setProfileMenuOpen(false)}>
+              <button type="button" role="menuitem" onClick={() => navigate('feedback')}>
                 Feedback
               </button>
               <div className="sidebar-profile-menu-divider" />

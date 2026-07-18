@@ -14,10 +14,13 @@ from app import __version__
 from app.api.archive import router as archive_router
 from app.api.auth import router as auth_router
 from app.api.chat import router as chat_router
+from app.api.contact_feedback import router as contact_feedback_router
 from app.api.feedback import router as feedback_router
 from app.api.generate import router as generate_router
+from app.api.memorize import router as memorize_router
 from app.api.memories import router as memories_router
 from app.api.sessions import router as sessions_router
+from app.api.tasks import router as tasks_router
 from app.config import Settings, get_settings
 from app.core.database import get_db  # noqa: F401  (exposed for later routes)
 from app.mcp.memory_skill import MEMORY_TOOL_CATALOG
@@ -76,10 +79,13 @@ def create_app() -> FastAPI:
     application.include_router(auth_router)
     application.include_router(chat_router)
     application.include_router(feedback_router)
+    application.include_router(contact_feedback_router)
     application.include_router(generate_router)
+    application.include_router(memorize_router)
     application.include_router(memories_router)
     application.include_router(archive_router)
     application.include_router(sessions_router)
+    application.include_router(tasks_router)
 
     return application
 

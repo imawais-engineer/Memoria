@@ -14,6 +14,9 @@ import asyncio
 import json
 import logging
 import os
+import queue
+import threading
+from collections.abc import AsyncIterator
 from http import HTTPStatus
 from types import ModuleType
 from typing import Any
@@ -272,6 +275,80 @@ async def call_qwen_chat(
         )
 
     return response.output["choices"][0]["message"]["content"]
+
+
+async def stream_qwen_chat(
+    messages: list[dict[str, Any]],
+    model: str = DEFAULT_MODEL,
+) -> AsyncIterator[str]:
+    """Stream Qwen chat tokens as they arrive from DashScope."""
+
+    client = get_dashscope_client()
+    token_queue: queue.Queue[tuple[str, Any]] = queue.Queue()
+    loop = asyncio.get_running_loop()
+
+    def _producer() -> None:
+        try:
+            responses = client.Generation.call(
+                model=model,
+                messages=messages,
+                result_format="message",
+                stream=True,
+                incremental_output=True,
+            )
+            for response in responses:
+                status_code = getattr(response, "status_code", HTTPStatus.OK)
+                if status_code != HTTPStatus.OK:
+                    loop.call_soon_threadsafe(
+                        token_queue.put_nowait, ("error", response)
+                    )
+                    return
+                output = getattr(response, "output", None) or {}
+                choices = (
+                    output.get("choices")
+                    if isinstance(output, dict)
+                    else getattr(output, "choices", None)
+                )
+                if not choices:
+                    continue
+                choice = choices[0]
+                message = (
+                    choice.get("message")
+                    if isinstance(choice, dict)
+                    else getattr(choice, "message", None)
+                )
+                content = None
+                if isinstance(message, dict):
+                    content = message.get("content")
+                elif message is not None:
+                    content = getattr(message, "content", None)
+                if content:
+                    loop.call_soon_threadsafe(
+                        token_queue.put_nowait, ("token", content)
+                    )
+            loop.call_soon_threadsafe(token_queue.put_nowait, ("done", None))
+        except Exception as exc:  # noqa: BLE001
+            loop.call_soon_threadsafe(token_queue.put_nowait, ("error", exc))
+
+    threading.Thread(target=_producer, daemon=True).start()
+
+    while True:
+        kind, payload = await asyncio.to_thread(token_queue.get)
+        if kind == "token":
+            yield str(payload)
+        elif kind == "done":
+            break
+        elif kind == "error":
+            if isinstance(payload, Exception):
+                logger.exception("DashScope streaming failed (model=%s)", model)
+                raise RuntimeError("DashScope streaming failed") from payload
+            code = getattr(payload, "code", None)
+            message = getattr(payload, "message", None)
+            status_code = getattr(payload, "status_code", None)
+            raise RuntimeError(
+                f"DashScope streaming failed with status {status_code} "
+                f"(code={code}): {message}"
+            )
 
 
 async def get_embedding(
