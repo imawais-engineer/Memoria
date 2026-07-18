@@ -127,7 +127,7 @@ graph TD
 |------|-------|-----------|
 | **Session Memory** | Redis | Last 10 messages of the active chat; always in the model context |
 | **Personal Memory** | `memories` table | User-centric facts; extraction, decay, consolidation, conflict resolution |
-| **Personal Intelligence** | `users.global_memory_enabled` | ON = all Personal Memories; OFF = current session + `importance >= 0.9` only |
+| **Personal Intelligence** | `users.global_memory_enabled` | ON = all Personal Memories; OFF = current session + manual core memories (no `session_id`) |
 | **MemoryLess** | Redis only | No Personal Memory read/write, no archive; PI ignored |
 | **Context Archive** | `chat_messages` | Full transcripts; on-demand search only, not routine retrieval |
 

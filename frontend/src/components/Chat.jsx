@@ -970,7 +970,7 @@ export default function Chat({
             messages.map((m, i) => {
               const copyText = getMessageCopyText(m)
               const showCopy =
-                m.role === 'assistant' &&
+                (m.role === 'assistant' || m.role === 'user') &&
                 m.kind !== 'voice-status' &&
                 copyText.trim()
               const showFeedback =

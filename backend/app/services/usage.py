@@ -1,4 +1,4 @@
-"""Per-user quotas for multimodal generation."""
+"""Per-user quotas for chat messages and multimodal generation."""
 
 from __future__ import annotations
 
@@ -29,6 +29,14 @@ async def check_and_increment_usage(
         if user.video_count >= user.max_videos:
             return False
         user.video_count += 1
+    elif media_type == "audio":
+        if user.audio_count >= user.max_audio:
+            return False
+        user.audio_count += 1
+    elif media_type == "message":
+        if user.message_count >= user.max_messages:
+            return False
+        user.message_count += 1
     else:
         raise ValueError(f"Unsupported media_type: {media_type!r}")
 
@@ -44,10 +52,16 @@ async def get_usage_summary(db: AsyncSession, user_id: str) -> dict[str, int] | 
         return None
 
     return {
+        "message_count": user.message_count,
         "image_count": user.image_count,
         "video_count": user.video_count,
+        "audio_count": user.audio_count,
+        "max_messages": user.max_messages,
         "max_images": user.max_images,
         "max_videos": user.max_videos,
+        "max_audio": user.max_audio,
+        "messages_remaining": max(0, user.max_messages - user.message_count),
         "images_remaining": max(0, user.max_images - user.image_count),
         "videos_remaining": max(0, user.max_videos - user.video_count),
+        "audio_remaining": max(0, user.max_audio - user.audio_count),
     }

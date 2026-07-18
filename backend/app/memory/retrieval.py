@@ -85,15 +85,23 @@ async def retrieve_context_and_ids(
     ]
 
     if not global_memory_enabled:
-        # Personal Intelligence OFF: current session memories + essential facts only.
-        scope_filters = [Memory.importance >= 0.9]
+        # Personal Intelligence OFF: current-session memories plus manually
+        # memorized core facts (no session binding).
         if session_id:
             try:
                 session_uuid = uuid.UUID(session_id)
-                scope_filters.append(Memory.session_id == session_uuid)
             except ValueError:
-                pass
-        filters.append(or_(*scope_filters))
+                return "", []
+            filters.append(
+                or_(
+                    Memory.session_id == session_uuid,
+                    (Memory.type == "core") & Memory.session_id.is_(None),
+                )
+            )
+        else:
+            filters.append(
+                (Memory.type == "core") & Memory.session_id.is_(None)
+            )
 
     stmt = (
         select(Memory, score)

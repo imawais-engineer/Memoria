@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 
 import redis.asyncio as redis
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -13,6 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import get_db
 from app.core.redis_client import get_redis
 from app.services.agent_service import handle_message, handle_message_stream
+from app.services.usage import check_and_increment_usage
 
 router = APIRouter()
 
@@ -32,6 +33,17 @@ class ChatResponse(BaseModel):
     title: str | None = None
 
 
+async def _enforce_message_limit(db: AsyncSession, user_id: str) -> None:
+    """Raise 429 when the user has exhausted their message quota."""
+
+    allowed = await check_and_increment_usage(db, user_id, "message")
+    if not allowed:
+        raise HTTPException(
+            status_code=429,
+            detail="Message limit reached (10 max).",
+        )
+
+
 @router.post("/chat", response_model=ChatResponse, tags=["chat"])
 async def chat(
     body: ChatRequest,
@@ -39,6 +51,8 @@ async def chat(
     redis_client: redis.Redis = Depends(get_redis),
 ) -> ChatResponse:
     """Process one chat turn: retrieve memory, call Qwen, persist session."""
+
+    await _enforce_message_limit(db, body.user_id)
 
     result = await handle_message(
         body.user_id,
@@ -59,6 +73,8 @@ async def chat_stream(
     redis_client: redis.Redis = Depends(get_redis),
 ) -> StreamingResponse:
     """Stream one chat turn via Server-Sent Events."""
+
+    await _enforce_message_limit(db, body.user_id)
 
     async def event_generator():
         try:

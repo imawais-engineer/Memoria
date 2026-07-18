@@ -21,9 +21,20 @@ async def test_list_models(client: AsyncClient):
 
 
 @pytest.mark.asyncio
-async def test_slash_only_returns_static_help(client: AsyncClient):
-    user_id = str(uuid.uuid4())
+async def test_slash_only_returns_static_help(client: AsyncClient, db_session_factory):
+    user_id = uuid.uuid4()
     session_id = str(uuid.uuid4())
+    async with db_session_factory() as db:
+        db.add(
+            User(
+                id=user_id,
+                username=f"slash_{user_id.hex[:8]}",
+                first_name="Test",
+                last_name="User",
+                favorite_book="Dune",
+            )
+        )
+        await db.commit()
 
     with patch(
         "app.api.chat.handle_message",
@@ -44,7 +55,7 @@ async def test_slash_only_returns_static_help(client: AsyncClient):
         res = await client.post(
             "/chat",
             json={
-                "user_id": user_id,
+                "user_id": str(user_id),
                 "message": "/",
                 "session_id": session_id,
             },
@@ -62,7 +73,20 @@ async def test_slash_only_returns_static_help(client: AsyncClient):
 
 
 @pytest.mark.asyncio
-async def test_chat_returns_title_when_provided(client: AsyncClient):
+async def test_chat_returns_title_when_provided(client: AsyncClient, db_session_factory):
+    user_id = uuid.uuid4()
+    async with db_session_factory() as db:
+        db.add(
+            User(
+                id=user_id,
+                username=f"title_{user_id.hex[:8]}",
+                first_name="Test",
+                last_name="User",
+                favorite_book="Dune",
+            )
+        )
+        await db.commit()
+
     with patch(
         "app.api.chat.handle_message",
         new=AsyncMock(
@@ -77,7 +101,7 @@ async def test_chat_returns_title_when_provided(client: AsyncClient):
         res = await client.post(
             "/chat",
             json={
-                "user_id": str(uuid.uuid4()),
+                "user_id": str(user_id),
                 "message": "I am planning a trip to Istanbul",
             },
         )
@@ -87,7 +111,20 @@ async def test_chat_returns_title_when_provided(client: AsyncClient):
 
 
 @pytest.mark.asyncio
-async def test_chat_accepts_model_field(client: AsyncClient):
+async def test_chat_accepts_model_field(client: AsyncClient, db_session_factory):
+    user_id = uuid.uuid4()
+    async with db_session_factory() as db:
+        db.add(
+            User(
+                id=user_id,
+                username=f"model_{user_id.hex[:8]}",
+                first_name="Test",
+                last_name="User",
+                favorite_book="Dune",
+            )
+        )
+        await db.commit()
+
     with patch(
         "app.api.chat.handle_message",
         new=AsyncMock(return_value={"reply": "ok", "session_id": "s1", "memory_ids": []}),
@@ -95,7 +132,7 @@ async def test_chat_accepts_model_field(client: AsyncClient):
         res = await client.post(
             "/chat",
             json={
-                "user_id": str(uuid.uuid4()),
+                "user_id": str(user_id),
                 "message": "hello",
                 "model": "qwq-plus",
             },
@@ -274,6 +311,67 @@ async def test_voice_generation_returns_overview_and_audio(
     assert payload["overview_text"] == fake_overview
     assert payload["audio_data_uri"] == fake_audio
     assert payload["title"] == "Voice: create an overview of this discussion"
+
+
+@pytest.mark.asyncio
+async def test_message_limit_returns_429(client: AsyncClient, db_session_factory):
+    user_id = uuid.uuid4()
+    async with db_session_factory() as db:
+        db.add(
+            User(
+                id=user_id,
+                username=f"msg_{user_id.hex[:8]}",
+                first_name="Test",
+                last_name="User",
+                favorite_book="Dune",
+                message_count=10,
+                max_messages=10,
+            )
+        )
+        await db.commit()
+
+    with patch(
+        "app.api.chat.handle_message",
+        new=AsyncMock(return_value={"reply": "ok", "session_id": "s1", "memory_ids": []}),
+    ):
+        res = await client.post(
+            "/chat",
+            json={"user_id": str(user_id), "message": "hello"},
+        )
+    assert res.status_code == 429
+
+
+@pytest.mark.asyncio
+async def test_audio_limit_returns_429(client: AsyncClient, db_session_factory):
+    user_id = uuid.uuid4()
+    session_id = uuid.uuid4()
+    async with db_session_factory() as db:
+        db.add(
+            User(
+                id=user_id,
+                username=f"aud_{user_id.hex[:8]}",
+                first_name="Test",
+                last_name="User",
+                favorite_book="Dune",
+                audio_count=2,
+                max_audio=2,
+            )
+        )
+        await db.commit()
+
+    with patch(
+        "app.api.generate.generate_voice_overview",
+        new=AsyncMock(return_value={"overview_text": "x", "audio_data_uri": "data:audio/wav"}),
+    ):
+        res = await client.post(
+            "/api/generate/voice",
+            json={
+                "user_id": str(user_id),
+                "session_id": str(session_id),
+                "prompt": "overview",
+            },
+        )
+    assert res.status_code == 429
 
 
 @pytest.mark.asyncio

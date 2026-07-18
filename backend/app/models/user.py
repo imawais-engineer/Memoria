@@ -35,11 +35,23 @@ class User(Base):
     video_count: Mapped[int] = mapped_column(
         Integer, nullable=False, default=0, server_default=text("0")
     )
+    audio_count: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=0, server_default=text("0")
+    )
+    message_count: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=0, server_default=text("0")
+    )
     max_images: Mapped[int] = mapped_column(
         Integer, nullable=False, default=5, server_default=text("5")
     )
     max_videos: Mapped[int] = mapped_column(
         Integer, nullable=False, default=2, server_default=text("2")
+    )
+    max_audio: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=2, server_default=text("2")
+    )
+    max_messages: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=10, server_default=text("10")
     )
     default_chat_model: Mapped[str] = mapped_column(
         String, nullable=False, default="qwen-plus", server_default=text("'qwen-plus'")

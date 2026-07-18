@@ -103,7 +103,7 @@ These features enhance usability, personalization, and privacy while staying tru
 ## 5. Multimodal Generation & Model Switcher (Implemented)
 
 **Description:**
-- **Chat slash commands** — `/imagine` and `/gen_video` for inline images/videos; `/gen_voice` for session overview + TTS audio. Per-user quotas: default **5 images** and **2 videos** (voice unlimited).
+- **Chat slash commands** — `/imagine` and `/gen_video` for inline images/videos; `/gen_voice` for session overview + TTS audio. Per-user quotas (reset on upgrade): **10 messages**, **5 images**, **2 videos**, **2 voice** generations.
 - **Chat model switcher** — pick `qwen-plus`, `qwen-max`, `qwq-plus`, or `qwen-turbo` per session.
 
 **Why it helps:**

@@ -616,7 +616,7 @@ Strong feature highlights, architecture overview, deployment instructions.
 
 | Component | Details |
 |-----------|---------|
-| User quotas | `users.image_count`, `video_count`, `max_images` (default 5), `max_videos` (default 2) |
+| User quotas | `users.image_count`, `video_count`, `audio_count`, `message_count`, `max_images` (5), `max_videos` (2), `max_audio` (2), `max_messages` (10) |
 | `generated_assets` table | Stores each image/video URL, prompt, type, and timestamp |
 | `app/services/usage.py` | `check_and_increment_usage(db, user_id, media_type)` → `False` at limit |
 | Image API | `POST /api/generate/image` — model `wan2.1-t2i-plus` via `ImageSynthesis.call` |
@@ -650,7 +650,7 @@ Strong feature highlights, architecture overview, deployment instructions.
 |---------|--------|-------|
 | `/imagine <prompt>` | Image via `wan2.1-t2i-plus` (`POST /api/generate/image`) | 5 per user |
 | `/gen_video <prompt>` | Video via `wan2.1-t2v-turbo` (`POST /api/generate/video`) | 2 per user |
-| `/gen_voice <prompt>` | Two-step voice overview (Qwen summary + TTS) | None |
+| `/gen_voice <prompt>` | Two-step voice overview (Qwen summary + TTS) | 2 per user |
 
 **Voice flow (`POST /api/generate/voice`)**
 
@@ -676,6 +676,40 @@ Strong feature highlights, architecture overview, deployment instructions.
 
 ---
 
+## Level 3.11 – Usage Limits & Verification
+
+**Objective:** Enforce per-user quotas on chat messages and voice generation, reset all counters on upgrade, improve chat UI feedback/copy controls, and ship an automated end-to-end verification script.
+
+**Backend**
+
+| Component | Details |
+|-----------|---------|
+| User quotas | `users.message_count`, `audio_count`, `max_messages` (default 10), `max_audio` (default 2); existing `max_images` (5), `max_videos` (2) |
+| `app/services/usage.py` | `check_and_increment_usage` supports `"message"` and `"audio"` in addition to `"image"` / `"video"` |
+| Chat | `POST /chat` and `POST /chat/stream` enforce `max_messages` before processing (HTTP 429 when exceeded) |
+| Voice API | `POST /api/generate/voice` enforces `max_audio` |
+| Migration reset | `e1f2a3b4c5d6` adds columns and runs `UPDATE users SET message_count=0, image_count=0, video_count=0, audio_count=0, max_messages=10, max_images=5, max_videos=2, max_audio=2` |
+
+**Frontend**
+
+- **Feedback buttons** — thumbs up/down visible on dark chat background (light icon color, subtle border/background).
+- **Copy on user messages** — copy button on user bubbles copies the prompt; assistant copy unchanged.
+
+**E2E script:** `scripts/e2e_verification.py` — signup, chat + memory extraction, PI off/on recall, image/video/voice quota checks, memorize, tasks, memory delete.
+
+**How to verify:**
+
+```bash
+cd backend && alembic upgrade head
+uvicorn app.main:app --port 8000          # + celery worker
+pytest tests/test_multimodal.py
+python scripts/e2e_verification.py
+```
+
+**Files touched:** `backend/alembic/versions/e1f2a3b4c5d6_*.py`, `app/models/user.py`, `services/usage.py`, `api/chat.py`, `api/generate.py`, `tests/test_multimodal.py`; `frontend/src/components/Chat.jsx`, `index.css`; `scripts/e2e_verification.py`; `README.md`, `docs/UPGRADE_MEMORIA.md`, `docs/NEW_FEATURES.md`.
+
+---
+
 ## Level 4 – Context-Aware Memory Layering
 
 **Objective:** Re-architect Memoria into distinct, hackathon-optimised memory tiers with clear naming and strict isolation rules.
@@ -686,7 +720,7 @@ Strong feature highlights, architecture overview, deployment instructions.
 |------|---------|---------|
 | **Session Memory** | Redis (last 10 messages) | Short-term context for the active chat; always passed to the model |
 | **Personal Memory** | PostgreSQL `memories` + pgvector | User-centric facts (preferences, identity, goals); importance, decay, consolidation, conflict resolution |
-| **Personal Intelligence (PI)** | User preference `global_memory_enabled` | When ON, retrieve all Personal Memories across sessions; when OFF, only current-session memories + essential facts (`importance >= 0.9`) |
+| **Personal Intelligence (PI)** | User preference `global_memory_enabled` | When ON, retrieve all Personal Memories across sessions; when OFF, only current-session memories + manual core memories (no `session_id`) |
 | **MemoryLess** | Redis only while open | `is_memoryless=True` sessions: no Personal Memory read/write, no Context Archive, PI disabled |
 | **Context Archive** | PostgreSQL `chat_messages` | Full transcripts for non-MemoryLess sessions; queried on demand via `GET /api/search-archive` only |
 

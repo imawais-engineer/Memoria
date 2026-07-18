@@ -71,12 +71,18 @@ class GeneratedAssetOut(BaseModel):
 
 
 class UsageOut(BaseModel):
+    message_count: int
     image_count: int
     video_count: int
+    audio_count: int
+    max_messages: int
     max_images: int
     max_videos: int
+    max_audio: int
+    messages_remaining: int
     images_remaining: int
     videos_remaining: int
+    audio_remaining: int
 
 
 class AssetsListResponse(BaseModel):
@@ -192,6 +198,10 @@ async def create_voice(
     redis_client: redis.Redis = Depends(get_redis),
 ) -> GenerateVoiceResponse:
     """Two-step voice overview: Qwen summary of session context, then TTS."""
+
+    allowed = await check_and_increment_usage(db, body.user_id, "audio")
+    if not allowed:
+        raise HTTPException(status_code=429, detail="Audio generation limit reached")
 
     session_title = await _bind_media_session(
         db,

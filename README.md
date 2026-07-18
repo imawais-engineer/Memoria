@@ -26,7 +26,7 @@
 - **Structured output** – Qwen structured JSON responses power consolidation, reflection, and conflict resolution with schema fallbacks.
 - **Benchmark‑proven 77.6% improvement** – 12‑scenario evaluation shows memory‑augmented replies score **77.6% higher** on average (see [Benchmark](#benchmark) below).
 - **Markdown + LaTeX chat rendering** – assistant replies render rich Markdown and KaTeX math (`$...$`, `$$...$$`) in the dashboard.
-- **Multimodal generation in chat** – use `/imagine`, `/gen_video`, and `/gen_voice` slash commands in chat for inline images (`wan2.1-t2i-plus`), videos (`wan2.1-t2v-turbo`), and voice overviews (Qwen summary + `qwen3-tts-flash`). All media uses DashScope default settings (no per-user size/duration controls). Image/video quotas: default 5 images / 2 videos per user; voice has no limit.
+- **Multimodal generation in chat** – use `/imagine`, `/gen_video`, and `/gen_voice` slash commands in chat for inline images (`wan2.1-t2i-plus`), videos (`wan2.1-t2v-turbo`), and voice overviews (Qwen summary + `qwen3-tts-flash`). All media uses DashScope default settings (no per-user size/duration controls). Per-user quotas (reset on upgrade): **10 chat messages**, **5 images**, **2 videos**, **2 voice generations**; exceeding a limit returns HTTP 429.
 - **Chat model switcher** – choose among `qwen-plus`, `qwen-max`, `qwq-plus`, and `qwen-turbo` per session via `GET /api/models` and the chat composer dropdown.
 - **Deployment on Azure + Alibaba Cloud Terraform proof** – live instance on Azure; full stack IaC for Alibaba Cloud in [`infrastructure/acs_deployment.tf`](infrastructure/acs_deployment.tf).
 
@@ -122,6 +122,16 @@ Full results: [`scripts/benchmark_results.json`](scripts/benchmark_results.json)
 cd backend && python ../scripts/benchmark.py
 ```
 
+### End-to-end verification
+
+After migrations and with PostgreSQL, Redis, the API server, and a Celery worker running:
+
+```bash
+python scripts/e2e_verification.py
+```
+
+The script signs up a test user, exercises chat/memory, Personal Intelligence toggles, `/imagine` / `/gen_video` / `/gen_voice` quotas, memorize, tasks, and memory deletion, then prints a pass/fail summary. Set `MEMORIA_BASE_URL` (default `http://localhost:8000`) and `DATABASE_URL` if needed; media steps require `DASHSCOPE_API_KEY`.
+
 ---
 
 ## Demo video
@@ -150,7 +160,7 @@ cd backend && python ../scripts/benchmark.py
 backend/          FastAPI app, memory subsystem, MCP skills, Celery, Alembic
 frontend/         React (Vite) dashboard — public landing page, auth, chat, memory, persona
 infrastructure/   Terraform for Alibaba Cloud deployment
-scripts/          Benchmark suite and results
+scripts/          Benchmark suite, E2E verification, and results
 docs/             Architecture, roadmap, upgrade notes
 ```
 
