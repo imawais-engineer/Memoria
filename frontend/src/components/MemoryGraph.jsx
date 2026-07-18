@@ -155,7 +155,7 @@ export default function MemoryGraph({
           </div>
         </div>
 
-        <div className="memory-table-wrap hide-scrollbar">
+        <div className="memory-table-wrap">
           <table>
             <thead>
               <tr>

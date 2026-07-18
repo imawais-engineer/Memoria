@@ -66,20 +66,26 @@ const SLASH_COMMANDS = [
   {
     prefix: '/create_task',
     kind: 'task-create',
-    color: '#14b8a6',
+    color: '#0d9488',
     hint: 'Create a task',
   },
   {
-    prefix: '/show_tasks',
-    kind: 'task-show',
+    prefix: '/tasks_list',
+    kind: 'task-list',
     color: '#06b6d4',
-    hint: 'Show your tasks',
+    hint: 'List pending tasks',
+  },
+  {
+    prefix: '/task_complete',
+    kind: 'task-complete',
+    color: '#14b8a6',
+    hint: 'Mark task complete',
   },
   {
     prefix: '/list_memory',
     kind: 'memory-list',
     color: '#d97706',
-    hint: 'List session memories',
+    hint: 'List memories (scope follows PI)',
   },
   {
     prefix: '/forget_memory',
@@ -119,8 +125,16 @@ function parseCreateTask(text) {
   return title
 }
 
-function isShowTasksCommand(text) {
-  return text.trim() === '/show_tasks'
+function isTasksListCommand(text) {
+  return text.trim() === '/tasks_list'
+}
+
+function parseTaskComplete(text) {
+  const trimmed = text.trim()
+  if (!trimmed.startsWith('/task_complete')) return null
+  const arg = trimmed.slice('/task_complete'.length).trim()
+  if (!arg) return null
+  return arg
 }
 
 function parseMediaCommand(text) {
@@ -362,6 +376,11 @@ export default function Chat({
   const stickToBottomRef = useRef(true)
   const lastInjectNonce = useRef(null)
   const sessionMemoryIndexRef = useRef(new Map())
+  const pendingTaskIndexRef = useRef(new Map())
+
+  const piScopeNote = globalMemoryEnabled
+    ? 'Personal Intelligence is active – showing all memories.'
+    : 'Personal Intelligence is inactive – showing only current chat memories.'
 
   const slashMenuItems = useMemo(() => getSlashMenuItems(input), [input])
   const activeSlashCommand = useMemo(() => detectActiveSlashCommand(input), [input])
@@ -788,20 +807,22 @@ export default function Chat({
     ])
   }
 
-  async function sendShowTasks() {
-    const res = await fetch(`/api/tasks?user_id=${encodeURIComponent(userId)}`)
-    if (!res.ok) throw new Error(`Failed to load tasks (${res.status})`)
-    const tasks = await res.json()
+  async function sendTasksList() {
+    const pending = await fetchPendingTasksSorted()
+    rebuildPendingTaskIndex(pending)
+
     let content
-    if (!tasks.length) {
-      content = 'You have no tasks yet. Create one with `/create_task Buy groceries`.'
+    if (!pending.length) {
+      content =
+        'You have no pending tasks. Create one with `/create_task Buy groceries`.'
     } else {
-      const lines = tasks.map((task) => {
-        const mark = task.status === 'completed' ? '✓' : '○'
-        return `- ${mark} ${task.title}`
+      const lines = pending.map((task, i) => {
+        const seq = String(i + 1).padStart(2, '0')
+        return `${seq}. ○ ${task.title}`
       })
-      content = `**Your tasks:**\n\n${lines.join('\n')}`
+      content = `**Pending tasks:**\n\n${lines.join('\n')}\n\nUse \`/task_complete 01\` to mark a task complete.`
     }
+
     setMessages((current) => [
       ...current,
       {
@@ -814,9 +835,73 @@ export default function Chat({
     ])
   }
 
-  async function fetchSessionMemoriesSorted() {
+  async function fetchPendingTasksSorted() {
+    const res = await fetch(`/api/tasks?user_id=${encodeURIComponent(userId)}`)
+    if (!res.ok) throw new Error(`Failed to load tasks (${res.status})`)
+    const tasks = await res.json()
+    return tasks
+      .filter((task) => task.status !== 'completed')
+      .sort(
+        (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime(),
+      )
+  }
+
+  function rebuildPendingTaskIndex(tasks) {
+    const index = new Map()
+    tasks.forEach((task, i) => {
+      index.set(String(i + 1).padStart(2, '0'), task.id)
+    })
+    pendingTaskIndexRef.current = index
+    return index
+  }
+
+  async function sendTaskComplete(arg) {
+    const pending = await fetchPendingTasksSorted()
+    const index = rebuildPendingTaskIndex(pending)
+    const seq = arg.padStart(2, '0')
+    const taskId = index.get(seq)
+
+    if (!taskId) {
+      setMessages((current) => [
+        ...current,
+        {
+          role: 'assistant',
+          content: 'Invalid task ID. Use `/tasks_list` to see pending task IDs.',
+          kind: 'text',
+          memory_ids: [],
+          feedback: null,
+        },
+      ])
+      return
+    }
+
+    const res = await fetch(`/api/tasks/${encodeURIComponent(taskId)}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status: 'completed' }),
+    })
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}))
+      throw new Error(data.detail || `Failed to complete task (${res.status})`)
+    }
+
+    setMessages((current) => [
+      ...current,
+      {
+        role: 'assistant',
+        content: `✅ Task #${seq} marked complete.`,
+        kind: 'text',
+        memory_ids: [],
+        feedback: null,
+      },
+    ])
+  }
+
+  async function fetchMemoriesForCommands() {
     const params = new URLSearchParams({ user_id: userId })
-    if (sessionId) params.set('session_id', sessionId)
+    if (!globalMemoryEnabled && sessionId) {
+      params.set('session_id', sessionId)
+    }
     const res = await fetch(`/api/memories?${params}`)
     if (!res.ok) throw new Error(`Failed to load memories (${res.status})`)
     const data = await res.json()
@@ -858,19 +943,21 @@ export default function Chat({
   }
 
   async function sendListMemory() {
-    const memories = await fetchSessionMemoriesSorted()
+    const memories = await fetchMemoriesForCommands()
     rebuildSessionMemoryIndex(memories)
 
+    const scopeLine = piScopeNote
     let content
     if (!memories.length) {
-      content =
-        'No memories stored for this chat yet.\n\nUse `/memorize <fact>` to add one manually, or chat normally to extract memories automatically.'
+      content = globalMemoryEnabled
+        ? `${scopeLine}\n\nNo memories stored yet.\n\nUse \`/memorize <fact>\` to add one manually, or chat normally to extract memories automatically.`
+        : `${scopeLine}\n\nNo memories stored for this chat yet.\n\nUse \`/memorize <fact>\` to add one manually, or chat normally to extract memories automatically.`
     } else {
       const lines = memories.map((memory, i) => {
         const seq = String(i + 1).padStart(2, '0')
         return `${seq}. [${memory.type}] "${memory.content}"`
       })
-      content = `${lines.join('\n')}\n\nUse \`/forget_memory 01\` to remove a specific memory, or \`/forget_memory ALL\` to clear all.`
+      content = `${scopeLine}\n\n${lines.join('\n')}\n\nUse \`/forget_memory 01\` to remove a specific memory, or \`/forget_memory ALL\` to clear ${globalMemoryEnabled ? 'all listed' : 'this chat\'s'} memories.`
     }
 
     setMessages((current) => [
@@ -897,8 +984,9 @@ export default function Chat({
   }
 
   async function sendForgetMemory(arg) {
-    const memories = await fetchSessionMemoriesSorted()
+    const memories = await fetchMemoriesForCommands()
     const index = rebuildSessionMemoryIndex(memories)
+    const scopeLine = piScopeNote
 
     if (arg.toUpperCase() === 'ALL') {
       if (!memories.length) {
@@ -906,7 +994,9 @@ export default function Chat({
           ...current,
           {
             role: 'assistant',
-            content: 'No memories in this chat to forget.',
+            content: globalMemoryEnabled
+              ? `${scopeLine}\n\nNo memories to forget.`
+              : `${scopeLine}\n\nNo memories in this chat to forget.`,
             kind: 'text',
             memory_ids: [],
             feedback: null,
@@ -922,7 +1012,9 @@ export default function Chat({
         ...current,
         {
           role: 'assistant',
-          content: 'All memories in this chat have been forgotten.',
+          content: globalMemoryEnabled
+            ? `${scopeLine}\n\nAll listed memories have been forgotten.`
+            : `${scopeLine}\n\nAll memories in this chat have been forgotten.`,
           kind: 'text',
           memory_ids: [],
           feedback: null,
@@ -938,7 +1030,7 @@ export default function Chat({
         ...current,
         {
           role: 'assistant',
-          content: 'Invalid memory ID. Use `/list_memory` to see current IDs.',
+          content: `${scopeLine}\n\nInvalid memory ID. Use \`/list_memory\` to see current IDs.`,
           kind: 'text',
           memory_ids: [],
           feedback: null,
@@ -953,7 +1045,7 @@ export default function Chat({
       ...current,
       {
         role: 'assistant',
-        content: `Memory #${seq} deleted.`,
+        content: `${scopeLine}\n\nMemory #${seq} deleted.`,
         kind: 'text',
         memory_ids: [],
         feedback: null,
@@ -989,9 +1081,16 @@ export default function Chat({
       return
     }
 
-    if (isShowTasksCommand(text)) {
+    if (isTasksListCommand(text)) {
       setMessages((m) => [...m, { role: 'user', content: text, kind: 'text' }])
-      await runLocalCommand(sendShowTasks)
+      await runLocalCommand(sendTasksList)
+      return
+    }
+
+    const taskCompleteArg = parseTaskComplete(text)
+    if (taskCompleteArg) {
+      setMessages((m) => [...m, { role: 'user', content: text, kind: 'text' }])
+      await runLocalCommand(() => sendTaskComplete(taskCompleteArg))
       return
     }
 
@@ -1144,7 +1243,7 @@ export default function Chat({
 
           {infoDialog && (
             <div className="toggle-info-dialog" role="status">
-              <p>{infoDialog === 'pi' ? PI_INFO : MEMORYLESS_INFO}</p>
+              <p>{PI_INFO}</p>
               <button
                 type="button"
                 className="toggle-info-dismiss"
@@ -1324,7 +1423,7 @@ export default function Chat({
                     setError('Media generation is disabled in MemoryLess sessions.')
                     return
                   }
-                  if (cmd.kind === 'task-show' || cmd.kind === 'memory-list') {
+                  if (cmd.kind === 'task-list' || cmd.kind === 'memory-list') {
                     setInput(cmd.prefix)
                   } else {
                     insertSlashCommand(cmd)

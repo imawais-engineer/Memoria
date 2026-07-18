@@ -80,7 +80,14 @@ export default function TasksPage({ userId }) {
 
       {!loading && tasks.length > 0 && (
         <ul className="tasks-list">
-          {tasks.map((task) => (
+          {[...tasks]
+            .sort((a, b) => {
+              if (a.status === b.status) {
+                return new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+              }
+              return a.status === 'pending' ? -1 : 1
+            })
+            .map((task) => (
             <li
               key={task.id}
               className={`task-item${task.status === 'completed' ? ' completed' : ''}`}

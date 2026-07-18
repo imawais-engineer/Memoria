@@ -49,7 +49,8 @@ export default function HelpPage() {
           <h3>Tasks</h3>
           <p>
             Create tasks in chat with <code>/create_task Buy groceries</code>. View all
-            tasks on the Tasks page, or type <code>/show_tasks</code> to list them inline.
+            tasks on the Tasks page, or type <code>/tasks_list</code> to list pending
+            tasks inline, and <code>/task_complete 01</code> to mark one done.
           </p>
         </section>
 

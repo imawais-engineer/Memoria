@@ -17,9 +17,12 @@ SLASH_HELP_REPLY = (
     "/gen_voice <prompt> – Create a voice overview (AI)\n"
     "/memorize <fact> – Store a fact manually (no AI)\n"
     "/create_task <title> – Create a task (no AI)\n"
-    "/show_tasks – List your tasks (no AI)\n"
-    "/list_memory – List memories from this chat (no AI)\n"
-    "/forget_memory <ID|ALL> – Delete a memory or clear this chat (no AI)"
+    "/tasks_list – List pending tasks (no AI)\n"
+    "/task_complete <ID> – Mark a task complete (no AI)\n"
+    "/list_memory – List memories (no AI; all memories when PI is ON, "
+    "current chat only when PI is OFF)\n"
+    "/forget_memory <ID|ALL> – Delete memories (no AI; scope follows PI like "
+    "/list_memory)"
 )
 
 _MEDIA_PREFIXES: tuple[tuple[str, str], ...] = (
