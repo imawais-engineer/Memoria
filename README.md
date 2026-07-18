@@ -73,7 +73,7 @@ Then start the dashboard:
 cd frontend && npm install && npm run dev   # http://localhost:5173
 ```
 
-Open **http://localhost:5173** — you'll see the Memoria public landing dashboard at `/`. Click **Get Started** (top-right) to open `/auth`, then sign up or log in (username + favorite book). After login you're taken to `/app` (Chat, Memory, Persona). The chat UI uses lazy session creation: new chats appear in the sidebar only after you send the first message. Use the sidebar for **Personal Intelligence**, **New Chat**, and **Memoryless** private sessions. In chat, try `/imagine`, `/gen_video`, or `/gen_voice` for inline media; the composer also includes a **model switcher** (`qwen-plus`, `qwen-max`, `qwq-plus`, `qwen-turbo`).
+Open **http://localhost:5173** — you'll see the Memoria public landing dashboard at `/`. Click **Get Started** (top-right) to open `/auth`, then sign up or log in (username + favorite book). After login you're taken to `/app` with a **fresh blank chat**; past sessions appear under **Recent Chats** in the sidebar. Use **New Chat** and the **Memoryless** toggle (below it on empty chats) for session modes. In chat, try `/imagine`, `/gen_video`, or `/gen_voice` for inline media; the composer also includes a **model switcher** (`qwen-plus`, `qwen-max`, `qwq-plus`, `qwen-turbo`).
 
 ### 2b. Run locally (without Docker)
 

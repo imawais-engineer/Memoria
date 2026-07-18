@@ -1,6 +1,6 @@
 # Memoria Upgrade Plan v1.1 (Qwen-Optimized)
 
-**Project:** Memoria – Self-Evolving Personal AI with Human-like Memory  
+**Project:** Memoria – Self‑Evolving Personal AI with Human‑like Memory  
 **Track:** 1 – MemoryAgent  
 **Version:** Upgrade Plan v1.1  
 **Goal:** Elevate current implementation from ~64/100 to **Winning Level (90+/100)**

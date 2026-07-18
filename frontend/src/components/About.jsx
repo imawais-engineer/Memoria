@@ -12,6 +12,7 @@ import {
 } from 'chart.js'
 import { Line, Pie } from 'react-chartjs-2'
 import MemoriaLogo from './MemoriaLogo.jsx'
+import { APP_TAGLINE_SUFFIX } from '../constants/branding.js'
 import {
   BUILD_MILESTONES,
   DAILY_LABELS,
@@ -156,7 +157,7 @@ export default function About() {
   return (
     <div className="panel page-panel about-page">
       <div className="about-hero">
-        <MemoriaLogo size="lg" showName tagline="Personal AI with long-term memory" />
+        <MemoriaLogo size="lg" showName tagline={APP_TAGLINE_SUFFIX} layout="stacked" />
       </div>
 
       <section className="about-section">

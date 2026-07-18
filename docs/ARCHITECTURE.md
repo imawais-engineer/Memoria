@@ -1,4 +1,6 @@
-# Memoria — System Architecture (v1.1)
+# Memoria – Self‑Evolving Personal AI with Human‑like Memory
+
+## System Architecture (v1.1)
 
 Memoria is a self-evolving personal AI with human-like memory. The upgraded
 stack (Modules 1–3) adds **MCP memory skills** for external agents, a

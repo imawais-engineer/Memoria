@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import MemoriaLogo from './MemoriaLogo.jsx'
+import { APP_TAGLINE_SUFFIX } from '../constants/branding.js'
 
 export default function Sidebar({
   userId,
@@ -11,6 +12,9 @@ export default function Sidebar({
   loading,
   creatingChat,
   open,
+  isMemoryless = false,
+  showMemorylessToggle = false,
+  onMemorylessToggle,
   onSelect,
   onNewChat,
   onNavigate,
@@ -104,28 +108,48 @@ export default function Sidebar({
       <div className="sidebar-inner">
         <div className="sidebar-brand">
           <MemoriaLogo
-            size="md"
+            size="sm"
             showName
-            tagline="Personal AI with long-term memory"
+            tagline={APP_TAGLINE_SUFFIX}
+            layout="stacked"
             nameClassName="sidebar-brand-name"
           />
         </div>
 
-        <button
-          type="button"
-          className="sidebar-new-btn"
-          onClick={onNewChat}
-          disabled={creatingChat}
-        >
-          {creatingChat ? (
-            <span className="btn-loading">
-              <span className="spinner" aria-hidden="true" />
-              Starting…
-            </span>
-          ) : (
-            '+ New Chat'
+        <div className="sidebar-primary-actions">
+          <button
+            type="button"
+            className="sidebar-new-btn"
+            onClick={onNewChat}
+            disabled={creatingChat}
+          >
+            {creatingChat ? (
+              <span className="btn-loading">
+                <span className="spinner" aria-hidden="true" />
+                Starting…
+              </span>
+            ) : (
+              '+ New Chat'
+            )}
+          </button>
+
+          {showMemorylessToggle && (
+            <button
+              type="button"
+              className={`sidebar-memoryless-btn${isMemoryless ? ' is-on' : ''}`}
+              onClick={onMemorylessToggle}
+              aria-pressed={isMemoryless}
+              aria-label="Memoryless session"
+            >
+              Memoryless {isMemoryless ? 'ON' : 'OFF'}
+            </button>
           )}
-        </button>
+          {showMemorylessToggle && isMemoryless && (
+            <p className="sidebar-memoryless-hint">
+              This session will not use or store memories.
+            </p>
+          )}
+        </div>
 
         <nav className="sidebar-nav" aria-label="Main">
           <button

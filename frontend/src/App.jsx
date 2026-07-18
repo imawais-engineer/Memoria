@@ -1,19 +1,29 @@
-import { useCallback, useEffect, useState } from 'react'
+import { lazy, Suspense, useCallback, useEffect, useState } from 'react'
 import { BrowserRouter, Navigate, Route, Routes, useNavigate } from 'react-router-dom'
 import Auth from './components/Auth.jsx'
-import About from './components/About.jsx'
 import Chat from './components/Chat.jsx'
-import FeedbackPage from './components/FeedbackPage.jsx'
-import HelpPage from './components/HelpPage.jsx'
 import Landing from './components/Landing.jsx'
-import MediaPage from './components/MediaPage.jsx'
-import MemorizePage from './components/MemorizePage.jsx'
-import MemoryGraph from './components/MemoryGraph.jsx'
-import Persona from './components/Persona.jsx'
-import SettingsPage from './components/SettingsPage.jsx'
 import Sidebar from './components/Sidebar.jsx'
-import TasksPage from './components/TasksPage.jsx'
 import { IconChevronLeft, IconMenu } from './components/Icons.jsx'
+
+const About = lazy(() => import('./components/About.jsx'))
+const FeedbackPage = lazy(() => import('./components/FeedbackPage.jsx'))
+const HelpPage = lazy(() => import('./components/HelpPage.jsx'))
+const MediaPage = lazy(() => import('./components/MediaPage.jsx'))
+const MemorizePage = lazy(() => import('./components/MemorizePage.jsx'))
+const MemoryGraph = lazy(() => import('./components/MemoryGraph.jsx'))
+const Persona = lazy(() => import('./components/Persona.jsx'))
+const SettingsPage = lazy(() => import('./components/SettingsPage.jsx'))
+const TasksPage = lazy(() => import('./components/TasksPage.jsx'))
+
+function ViewFallback() {
+  return (
+    <div className="page-loading">
+      <span className="spinner spinner-inline" aria-hidden="true" />
+      Loading…
+    </div>
+  )
+}
 
 // Fixed demo token expected by the backend for destructive actions.
 export const DEMO_TOKEN = 'memoria-demo-token'
@@ -101,6 +111,7 @@ function MainApp({ auth, onAuth, onLogout }) {
   const [prefsSaving, setPrefsSaving] = useState(false)
   const [sidebarOpen, setSidebarOpen] = useState(loadSidebarOpen)
   const [injectMedia, setInjectMedia] = useState(null)
+  const [pendingChatEmpty, setPendingChatEmpty] = useState(true)
 
   const userId = auth?.user_id
   const displayName = [auth?.first_name, auth?.last_name].filter(Boolean).join(' ')
@@ -111,6 +122,8 @@ function MainApp({ auth, onAuth, onLogout }) {
   const isMemoryless = isPendingSession
     ? pendingSession.isMemoryless
     : Boolean(activeSession?.is_memoryless)
+  const showMemorylessToggle =
+    view === 'chat' && isPendingSession && pendingChatEmpty
 
   const fetchPreferences = useCallback(async () => {
     if (!userId) return
@@ -194,6 +207,7 @@ function MainApp({ auth, onAuth, onLogout }) {
     const pending = newPendingSession(isMemorylessFlag)
     setPendingSession(pending)
     setActiveSessionId(pending.sessionId)
+    setPendingChatEmpty(true)
     if (!isMemorylessFlag) {
       localStorage.setItem(sessionStorageKey(userId), pending.sessionId)
     } else {
@@ -215,27 +229,12 @@ function MainApp({ auth, onAuth, onLogout }) {
       if (cancelled) return
       setSessions(cleaned)
 
-      const savedId = localStorage.getItem(sessionStorageKey(userId))
-      const savedSession = savedId
-        ? cleaned.find((session) => session.session_id === savedId)
-        : null
-
-      if (savedSession) {
-        setPendingSession(null)
-        setActiveSessionId(savedSession.session_id)
-        return
-      }
-
-      if (cleaned.length > 0) {
-        setPendingSession(null)
-        setActiveSessionId(cleaned[0].session_id)
-        localStorage.setItem(sessionStorageKey(userId), cleaned[0].session_id)
-        return
-      }
-
+      // Always open a fresh blank chat; past sessions stay in the sidebar.
       const pending = newPendingSession(false)
       setPendingSession(pending)
       setActiveSessionId(pending.sessionId)
+      setPendingChatEmpty(true)
+      localStorage.removeItem(sessionStorageKey(userId))
     }
 
     bootstrapSessions()
@@ -467,10 +466,15 @@ function MainApp({ auth, onAuth, onLogout }) {
     userId,
   ])
 
+  const handleSidebarMemorylessToggle = useCallback(() => {
+    handleMemorylessChange(!isMemoryless)
+  }, [handleMemorylessChange, isMemoryless])
+
   function renderMainView() {
+    let content
     switch (view) {
       case 'chat':
-        return (
+        content = (
           <Chat
             userId={userId}
             sessionId={activeSessionId}
@@ -485,34 +489,40 @@ function MainApp({ auth, onAuth, onLogout }) {
             onSessionCreated={handleSessionCreated}
             onSessionTitleUpdate={handleSessionTitleUpdate}
             onGlobalMemoryToggle={handleGlobalMemoryToggle}
-            onMemorylessChange={handleMemorylessChange}
+            onPendingChatEmptyChange={setPendingChatEmpty}
             onNewChat={handleNewChat}
           />
         )
+        break
       case 'memory':
-        return (
+        content = (
           <MemoryGraph
             userId={userId}
             username={auth?.username}
             sessionId={activeSessionId}
           />
         )
+        break
       case 'persona':
-        return (
+        content = (
           <Persona
             userId={auth.user_id}
             persona={persona}
             onSaved={handlePersonaSaved}
           />
         )
+        break
       case 'memorize':
-        return <MemorizePage userId={userId} />
+        content = <MemorizePage userId={userId} />
+        break
       case 'media':
-        return <MediaPage userId={userId} />
+        content = <MediaPage userId={userId} />
+        break
       case 'tasks':
-        return <TasksPage userId={userId} />
+        content = <TasksPage userId={userId} />
+        break
       case 'settings':
-        return (
+        content = (
           <SettingsPage
             userId={userId}
             globalMemoryEnabled={globalMemoryEnabled}
@@ -521,15 +531,25 @@ function MainApp({ auth, onAuth, onLogout }) {
             onSaved={handleSettingsSaved}
           />
         )
+        break
       case 'feedback':
-        return <FeedbackPage userId={userId} />
+        content = <FeedbackPage userId={userId} />
+        break
       case 'help':
-        return <HelpPage />
+        content = <HelpPage />
+        break
       case 'about':
-        return <About />
+        content = <About />
+        break
       default:
-        return null
+        content = null
     }
+
+    if (view === 'chat') {
+      return content
+    }
+
+    return <Suspense fallback={<ViewFallback />}>{content}</Suspense>
   }
 
   useEffect(() => {
@@ -570,6 +590,9 @@ function MainApp({ auth, onAuth, onLogout }) {
           loading={sessionsLoading}
           open={sidebarOpen}
           creatingChat={creatingChat}
+          isMemoryless={isMemoryless}
+          showMemorylessToggle={showMemorylessToggle}
+          onMemorylessToggle={handleSidebarMemorylessToggle}
           onSelect={handleSelectSession}
           onNewChat={handleNewChat}
           onNavigate={setView}

@@ -6,6 +6,7 @@ import rehypeKatex from 'rehype-katex'
 import 'katex/dist/katex.min.css'
 import ModelDropdown from './ModelDropdown.jsx'
 import MemoriaLogo from './MemoriaLogo.jsx'
+import { APP_TAGLINE_SUFFIX } from '../constants/branding.js'
 import {
   IconCheck,
   IconCopy,
@@ -19,9 +20,6 @@ const TEXTAREA_MAX_VH = 40
 
 const PI_INFO =
   'When enabled, I can access all your memories across chats. When disabled, I only see this session\'s context and essential facts.'
-
-const MEMORYLESS_INFO =
-  'This session will not use or store any memories. Your conversation will be completely private and won\'t be remembered.'
 
 const VOICE_STATUS_MESSAGES = [
   'Running voice generation…',
@@ -287,7 +285,7 @@ export default function Chat({
   onSessionCreated,
   onSessionTitleUpdate,
   onGlobalMemoryToggle,
-  onMemorylessChange,
+  onPendingChatEmptyChange,
   onNewChat,
 }) {
   const [messages, setMessages] = useState([])
@@ -321,6 +319,10 @@ export default function Chat({
   const isStreaming = messages.some((m) => m.streaming)
 
   useEffect(() => {
+    onPendingChatEmptyChange?.(showMemorylessToggle)
+  }, [onPendingChatEmptyChange, showMemorylessToggle])
+
+  useEffect(() => {
     setSelectedModel(defaultChatModel || 'qwen-plus')
   }, [defaultChatModel])
 
@@ -335,12 +337,6 @@ export default function Chat({
     const turningOn = !globalMemoryEnabled
     await onGlobalMemoryToggle?.()
     if (turningOn) setInfoDialog('pi')
-  }
-
-  async function handleMemorylessToggle() {
-    const turningOn = !isMemoryless
-    await onMemorylessChange?.(turningOn)
-    if (turningOn) setInfoDialog('memoryless')
   }
 
   const adjustTextareaHeight = useCallback(() => {
@@ -868,7 +864,13 @@ export default function Chat({
         <div className="chat-toolbar-left">
           {!sidebarOpen && (
             <div className="collapsed-top-bar">
-              <MemoriaLogo size="sm" showName nameClassName="collapsed-brand" />
+              <MemoriaLogo
+                size="sm"
+                showName
+                tagline={APP_TAGLINE_SUFFIX}
+                layout="stacked"
+                nameClassName="collapsed-brand"
+              />
               <button
                 type="button"
                 className="collapsed-new-chat"
@@ -916,21 +918,6 @@ export default function Chat({
                 {globalMemoryEnabled ? 'ON' : 'OFF'}
               </button>
             </label>
-
-            {showMemorylessToggle && (
-              <label className="toggle-card-row">
-                <span className="toggle-card-label">Memoryless</span>
-                <button
-                  type="button"
-                  className={`pi-switch-track ${isMemoryless ? 'on memoryless-on' : 'off'}`}
-                  onClick={handleMemorylessToggle}
-                  aria-pressed={isMemoryless}
-                  aria-label="Memoryless session"
-                >
-                  {isMemoryless ? 'ON' : 'OFF'}
-                </button>
-              </label>
-            )}
           </div>
 
           {infoDialog && (

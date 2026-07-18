@@ -156,23 +156,30 @@ select {
   min-height: 0;
   width: 232px;
   min-width: 232px;
-  gap: 18px;
+  gap: 10px;
 }
 
 .sidebar-brand {
-  padding: 0 6px 4px;
+  padding: 2px 4px 0;
 }
 
 .memoria-logo {
   display: flex;
   align-items: center;
   gap: 10px;
+  min-width: 0;
 }
 
-.memoria-logo-text {
-  display: flex;
+.memoria-logo--stacked {
   flex-direction: column;
-  gap: 2px;
+  align-items: flex-start;
+  gap: 6px;
+}
+
+.memoria-logo-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
   min-width: 0;
 }
 
@@ -180,14 +187,16 @@ select {
   font-size: 22px;
   color: var(--text-primary);
   letter-spacing: -0.02em;
-  line-height: 1.2;
+  line-height: 1.15;
   font-weight: 600;
+  white-space: nowrap;
 }
 
 .memoria-logo-tagline {
-  font-size: 12px;
+  font-size: 11px;
   color: var(--text-muted);
   line-height: 1.35;
+  display: block;
 }
 
 .memoria-logo-mark {
@@ -195,17 +204,17 @@ select {
 }
 
 .sidebar-brand-name {
-  font-size: 22px;
-  color: var(--text-primary);
-  letter-spacing: -0.02em;
-  line-height: 1.2;
+  font-size: 18px;
 }
 
-.sidebar-brand-tagline {
-  margin-top: 4px;
-  font-size: 12px;
-  color: var(--text-muted);
-  line-height: 1.35;
+.sidebar-brand .memoria-logo-tagline {
+  max-width: 100%;
+}
+
+.sidebar-primary-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
 }
 
 .sidebar-new-btn {
@@ -216,9 +225,41 @@ select {
   color: #0b0e1a;
   font-weight: 600;
   font-size: 14px;
-  padding: 11px 16px;
+  padding: 10px 16px;
   cursor: pointer;
   transition: opacity 0.15s ease, transform 0.15s ease;
+}
+
+.sidebar-memoryless-btn {
+  width: 100%;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-button);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text-secondary);
+  font-weight: 600;
+  font-size: 13px;
+  padding: 10px 16px;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+
+.sidebar-memoryless-btn:hover {
+  background: rgba(255, 255, 255, 0.07);
+  color: var(--text-primary);
+}
+
+.sidebar-memoryless-btn.is-on {
+  background: rgba(168, 85, 247, 0.14);
+  border-color: rgba(168, 85, 247, 0.45);
+  color: #d8b4fe;
+}
+
+.sidebar-memoryless-hint {
+  margin: -2px 0 0;
+  padding: 0 4px;
+  font-size: 11px;
+  line-height: 1.35;
+  color: var(--text-muted);
 }
 
 .sidebar-new-btn:hover:not(:disabled) {
@@ -233,7 +274,8 @@ select {
 .sidebar-nav {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 1px;
+  margin-top: 2px;
 }
 
 .sidebar-nav-link {
@@ -241,7 +283,7 @@ select {
   background: transparent;
   color: var(--text-secondary);
   text-align: left;
-  padding: 9px 12px;
+  padding: 8px 12px;
   border-radius: 10px;
   cursor: pointer;
   font-size: 14px;
@@ -659,17 +701,25 @@ select {
 
 .collapsed-top-bar {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 12px;
   margin-right: 16px;
   flex-shrink: 0;
 }
 
+.collapsed-top-bar .memoria-logo--stacked {
+  gap: 2px;
+}
+
 .collapsed-top-bar .memoria-logo-name,
 .collapsed-brand {
-  font-size: 15px;
+  font-size: 14px;
   font-weight: 600;
-  white-space: nowrap;
+}
+
+.collapsed-top-bar .memoria-logo-tagline {
+  font-size: 10px;
+  max-width: 180px;
 }
 
 .collapsed-new-chat {
@@ -1389,9 +1439,21 @@ select {
   padding: 6px;
   background: var(--panel-overlay);
   border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-card);
+  border-radius: 12px;
   z-index: 20;
   box-shadow: 0 12px 32px rgba(0, 0, 0, 0.5);
+  animation: slash-menu-in 0.16s ease-out;
+}
+
+@keyframes slash-menu-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .slash-menu-item {
@@ -1408,11 +1470,13 @@ select {
   border-radius: 10px;
   cursor: pointer;
   font-size: 13px;
+  transition: background 0.12s ease, transform 0.12s ease;
 }
 
 .slash-menu-item:hover,
 .slash-menu-item.active {
-  background: color-mix(in srgb, var(--cmd-color) 12%, transparent);
+  background: color-mix(in srgb, var(--cmd-color) 14%, transparent);
+  transform: translateX(2px);
 }
 
 .slash-menu-cmd {
@@ -1434,21 +1498,32 @@ select {
 }
 
 .action-chip {
-  border: 1px solid var(--border-subtle);
-  background: transparent;
-  color: var(--text-secondary);
-  border-radius: var(--radius-button);
-  padding: 5px 12px;
+  border: 1px solid color-mix(in srgb, var(--chip-color) 35%, transparent);
+  background: color-mix(in srgb, var(--chip-color) 10%, transparent);
+  color: var(--chip-color);
+  border-radius: 9999px;
+  padding: 6px 12px;
   font-size: 12px;
+  font-weight: 600;
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
   cursor: pointer;
-  transition: border-color 0.15s ease, color 0.15s ease, background 0.15s ease;
+  transition: background 0.12s ease, border-color 0.12s ease, transform 0.12s ease;
 }
 
 .action-chip:hover {
-  color: var(--chip-color, var(--text-primary));
-  border-color: var(--chip-color, var(--accent-blue));
-  background: color-mix(in srgb, var(--chip-color, var(--accent-blue)) 10%, transparent);
+  background: color-mix(in srgb, var(--chip-color) 18%, transparent);
+  border-color: color-mix(in srgb, var(--chip-color) 55%, transparent);
+  transform: translateY(-1px);
+}
+
+.page-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  min-height: 240px;
+  color: var(--text-muted);
+  font-size: 14px;
 }
 
 .error {

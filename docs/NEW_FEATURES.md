@@ -1,4 +1,4 @@
-**Project:** Memoria – Self-Evolving Personal AI with Human-like Memory  
+**Project:** Memoria – Self‑Evolving Personal AI with Human‑like Memory  
 **Track:** 1 – MemoryAgent  
 **Purpose:** Additional high-value features to increase user experience, innovation, and judge appeal.
 

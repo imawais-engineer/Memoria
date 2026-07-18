@@ -12,20 +12,25 @@ export default function MemoriaLogo({
   tagline = null,
   className = '',
   nameClassName = '',
+  layout = 'row',
 }) {
   const dim = SIZES[size] || SIZES.md
   const fontSize = Math.round(dim * 0.48)
+  const isStacked = layout === 'stacked'
 
   return (
-    <div className={`memoria-logo ${className}`.trim()}>
-      <svg
-        className="memoria-logo-mark"
-        width={dim}
-        height={dim}
-        viewBox="0 0 40 40"
-        fill="none"
-        aria-hidden="true"
-      >
+    <div
+      className={`memoria-logo${isStacked ? ' memoria-logo--stacked' : ''} ${className}`.trim()}
+    >
+      <div className="memoria-logo-row">
+        <svg
+          className="memoria-logo-mark"
+          width={dim}
+          height={dim}
+          viewBox="0 0 40 40"
+          fill="none"
+          aria-hidden="true"
+        >
         <defs>
           <filter id="memoria-logo-glow" x="-40%" y="-40%" width="180%" height="180%">
             <feGaussianBlur stdDeviation="2" result="blur" />
@@ -61,15 +66,12 @@ export default function MemoriaLogo({
         >
           M
         </text>
-      </svg>
-      {(showName || tagline) && (
-        <div className="memoria-logo-text">
-          {showName && (
-            <span className={`memoria-logo-name ${nameClassName}`.trim()}>Memoria</span>
-          )}
-          {tagline && <span className="memoria-logo-tagline">{tagline}</span>}
-        </div>
-      )}
+        </svg>
+        {showName && (
+          <span className={`memoria-logo-name ${nameClassName}`.trim()}>Memoria</span>
+        )}
+      </div>
+      {tagline && <span className="memoria-logo-tagline">{tagline}</span>}
     </div>
   )
 }
