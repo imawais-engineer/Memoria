@@ -84,7 +84,6 @@ function TypeBarChart({ types }) {
 export default function MemoryGraph({
   userId,
   username = null,
-  sessionId = null,
   refreshNonce = 0,
 }) {
   const [memories, setMemories] = useState([])
@@ -93,13 +92,6 @@ export default function MemoryGraph({
   const [error, setError] = useState('')
 
   const userLabel = username ? `@${username}` : userId
-
-  const sessionMemories = sessionId
-    ? memories.filter(
-        (memory) =>
-          !memory.session_id || memory.session_id === sessionId || memory.type === 'core',
-      )
-    : memories
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -185,7 +177,7 @@ export default function MemoryGraph({
           <div className="muted">
             {loading
               ? 'Loading…'
-              : `${sessionMemories.length} memories for ${userLabel}`}
+              : `${memories.length} memories across all chats for ${userLabel}`}
           </div>
         </div>
 
@@ -202,7 +194,7 @@ export default function MemoryGraph({
               </tr>
             </thead>
             <tbody>
-              {sessionMemories.map((m) => (
+              {memories.map((m) => (
                 <tr key={m.id}>
                   <td>
                     <span className={`badge ${m.type}`}>{m.type}</span>
@@ -218,10 +210,10 @@ export default function MemoryGraph({
                   </td>
                 </tr>
               ))}
-              {!loading && sessionMemories.length === 0 && (
+              {!loading && memories.length === 0 && (
                 <tr>
                   <td colSpan="6" className="muted empty-state-cell">
-                    No memories in this chat yet.
+                    No memories stored yet.
                   </td>
                 </tr>
               )}

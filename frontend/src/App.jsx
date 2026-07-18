@@ -500,7 +500,6 @@ function MainApp({ auth, onAuth, onLogout }) {
           <MemoryGraph
             userId={userId}
             username={auth?.username}
-            sessionId={activeSessionId}
             refreshNonce={memoryRefreshNonce}
           />
         )

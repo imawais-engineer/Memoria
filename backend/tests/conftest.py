@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 from app.core.database import get_db
 from app.main import app
 from app.memory.models import Base
+import app.models as _orm_models  # noqa: F401 — register ORM tables for create_all
 
 
 TEST_DATABASE_URL = os.getenv(

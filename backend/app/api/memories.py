@@ -11,12 +11,13 @@ from datetime import datetime
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query
 from pydantic import BaseModel, Field
-from sqlalchemy import delete, func, select
+from sqlalchemy import delete, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import get_settings
 from app.core.database import get_db
 from app.memory.models import Memory
+from app.models.chat_session import ChatSession
 
 router = APIRouter(prefix="/api", tags=["memories"])
 
@@ -31,6 +32,19 @@ class MemoryOut(BaseModel):
     decay_rate: float
     session_id: str | None = None
 
+
+def _active_memory_filters(user_id: str) -> tuple:
+    """Exclude archived, superseded, and memoryless-session memories."""
+
+    return (
+        Memory.user_id == user_id,
+        Memory.archived.is_(False),
+        Memory.superseded.is_(False),
+        or_(
+            Memory.session_id.is_(None),
+            ChatSession.is_memoryless.is_(False),
+        ),
+    )
 
 class MemoryStatsOut(BaseModel):
     """Aggregate memory statistics for the dashboard."""
@@ -58,16 +72,22 @@ async def memory_stats(
 ) -> MemoryStatsOut:
     """Return aggregate memory statistics for the dashboard."""
 
-    active_filter = (Memory.user_id == user_id, Memory.archived.is_(False))
+    active_filter = _active_memory_filters(user_id)
 
     total_memories = (
-        await db.execute(select(func.count()).select_from(Memory).where(*active_filter))
+        await db.execute(
+            select(func.count())
+            .select_from(Memory)
+            .outerjoin(ChatSession, Memory.session_id == ChatSession.id)
+            .where(*active_filter)
+        )
     ).scalar_one()
 
     consolidated_count = (
         await db.execute(
             select(func.count())
             .select_from(Memory)
+            .outerjoin(ChatSession, Memory.session_id == ChatSession.id)
             .where(*active_filter, Memory.is_consolidated.is_(True))
         )
     ).scalar_one()
@@ -76,6 +96,7 @@ async def memory_stats(
         await db.execute(
             select(func.count())
             .select_from(Memory)
+            .outerjoin(ChatSession, Memory.session_id == ChatSession.id)
             .where(
                 *active_filter,
                 Memory.meta_data["source"].astext == "consolidation",
@@ -85,7 +106,10 @@ async def memory_stats(
 
     avg_importance_raw = (
         await db.execute(
-            select(func.avg(Memory.importance)).select_from(Memory).where(*active_filter)
+            select(func.avg(Memory.importance))
+            .select_from(Memory)
+            .outerjoin(ChatSession, Memory.session_id == ChatSession.id)
+            .where(*active_filter)
         )
     ).scalar_one()
     avg_importance = float(avg_importance_raw or 0.0)
@@ -102,6 +126,7 @@ async def memory_stats(
         await db.execute(
             select(Memory.type, func.count())
             .select_from(Memory)
+            .outerjoin(ChatSession, Memory.session_id == ChatSession.id)
             .where(*active_filter)
             .group_by(Memory.type)
         )
@@ -125,25 +150,30 @@ async def list_memories(
     session_id: str | None = Query(None, min_length=1),
     db: AsyncSession = Depends(get_db),
 ) -> list[MemoryOut]:
-    """Return a user's active (non-archived) memories.
+    """Return a user's active memories across all chats.
 
+    Excludes archived, superseded (forgotten), and memoryless-session memories.
     When ``session_id`` is provided, only memories for that session are returned,
     ordered oldest-first for stable chat command numbering.
-  """
+    """
 
-    filters = [Memory.user_id == user_id, Memory.archived.is_(False)]
-
+    all_filters = list(_active_memory_filters(user_id))
     if session_id is not None:
         try:
             session_uuid = uuid.UUID(session_id)
         except ValueError:
             raise HTTPException(status_code=400, detail="Invalid session id")
-        filters.append(Memory.session_id == session_uuid)
+        all_filters.append(Memory.session_id == session_uuid)
         order_by = Memory.created_at.asc()
     else:
         order_by = Memory.created_at.desc()
 
-    stmt = select(Memory).where(*filters).order_by(order_by)
+    stmt = (
+        select(Memory)
+        .outerjoin(ChatSession, Memory.session_id == ChatSession.id)
+        .where(*all_filters)
+        .order_by(order_by)
+    )
     rows = (await db.execute(stmt)).scalars().all()
     return [
         MemoryOut(
