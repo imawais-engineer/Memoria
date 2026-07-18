@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { BrowserRouter, Navigate, Route, Routes, useNavigate } from 'react-router-dom'
 import Auth from './components/Auth.jsx'
+import About from './components/About.jsx'
 import Chat from './components/Chat.jsx'
 import FeedbackPage from './components/FeedbackPage.jsx'
 import HelpPage from './components/HelpPage.jsx'
@@ -12,6 +13,7 @@ import Persona from './components/Persona.jsx'
 import SettingsPage from './components/SettingsPage.jsx'
 import Sidebar from './components/Sidebar.jsx'
 import TasksPage from './components/TasksPage.jsx'
+import { IconChevronLeft, IconMenu } from './components/Icons.jsx'
 
 // Fixed demo token expected by the backend for destructive actions.
 export const DEMO_TOKEN = 'memoria-demo-token'
@@ -523,6 +525,8 @@ function MainApp({ auth, onAuth, onLogout }) {
         return <FeedbackPage userId={userId} />
       case 'help':
         return <HelpPage />
+      case 'about':
+        return <About />
       default:
         return null
     }
@@ -552,7 +556,7 @@ function MainApp({ auth, onAuth, onLogout }) {
         aria-expanded={sidebarOpen}
         title={sidebarOpen ? 'Close sidebar' : 'Open sidebar'}
       >
-        {sidebarOpen ? '‹' : '☰'}
+        {sidebarOpen ? <IconChevronLeft /> : <IconMenu />}
       </button>
 
       <div className={`app-layout${sidebarOpen ? '' : ' app-layout--sidebar-closed'}`}>

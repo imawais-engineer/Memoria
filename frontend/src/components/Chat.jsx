@@ -5,6 +5,14 @@ import remarkMath from 'remark-math'
 import rehypeKatex from 'rehype-katex'
 import 'katex/dist/katex.min.css'
 import ModelDropdown from './ModelDropdown.jsx'
+import MemoriaLogo from './MemoriaLogo.jsx'
+import {
+  IconCheck,
+  IconCopy,
+  IconSend,
+  IconThumbsDown,
+  IconThumbsUp,
+} from './Icons.jsx'
 
 const SCROLL_THRESHOLD_PX = 50
 const TEXTAREA_MAX_VH = 40
@@ -16,10 +24,10 @@ const MEMORYLESS_INFO =
   'This session will not use or store any memories. Your conversation will be completely private and won\'t be remembered.'
 
 const VOICE_STATUS_MESSAGES = [
-  '🔄 Running voice generation…',
-  '🔍 Analyzing session context…',
-  '📝 Creating text overview…',
-  '🎙️ Synthesizing voice…',
+  'Running voice generation…',
+  'Analyzing session context…',
+  'Creating text overview…',
+  'Synthesizing voice…',
 ]
 
 const SLASH_COMMANDS = [
@@ -164,7 +172,7 @@ function CopyButton({ text, className = 'copy-msg-btn', label = 'Copy' }) {
       title={copied ? 'Copied!' : label}
       aria-label={copied ? 'Copied' : label}
     >
-      {copied ? '✓' : '📋'}
+      {copied ? <IconCheck /> : <IconCopy />}
       <span className="copy-btn-label">{copied ? 'Copied!' : label}</span>
     </button>
   )
@@ -860,7 +868,7 @@ export default function Chat({
         <div className="chat-toolbar-left">
           {!sidebarOpen && (
             <div className="collapsed-top-bar">
-              <span className="collapsed-brand">Memoria</span>
+              <MemoriaLogo size="sm" showName nameClassName="collapsed-brand" />
               <button
                 type="button"
                 className="collapsed-new-chat"
@@ -991,7 +999,7 @@ export default function Chat({
                             title="Helpful response"
                             aria-label="Thumbs up"
                           >
-                            👍
+                            <IconThumbsUp />
                           </button>
                           <button
                             type="button"
@@ -1001,7 +1009,7 @@ export default function Chat({
                             title="Unhelpful response"
                             aria-label="Thumbs down"
                           >
-                            👎
+                            <IconThumbsDown />
                           </button>
                         </>
                       ) : null}
@@ -1088,7 +1096,7 @@ export default function Chat({
             aria-label="Send"
             title="Send"
           >
-            ➤
+            <IconSend />
           </button>
         </div>
 

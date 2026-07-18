@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import MemoriaLogo from './MemoriaLogo.jsx'
 
 export default function Auth({ onAuth, embedded = false }) {
   const [mode, setMode] = useState('login')
@@ -74,11 +75,7 @@ export default function Auth({ onAuth, embedded = false }) {
       <div className="auth-card">
         {!embedded && (
           <div className="auth-header">
-            <div className="logo">M</div>
-            <div>
-              <div className="title">Memoria</div>
-              <div className="subtitle">Personal AI with long-term memory</div>
-            </div>
+            <MemoriaLogo size="md" showName tagline="Personal AI with long-term memory" />
           </div>
         )}
 

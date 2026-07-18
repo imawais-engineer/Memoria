@@ -116,6 +116,15 @@
   color: var(--text-primary, #ffffff);
 }
 
+.landing-nav-brand .memoria-logo-name,
+.landing-nav-name {
+  font-size: 18px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  text-shadow: 0 0 24px rgba(108, 140, 255, 0.35);
+  color: var(--text-primary, #ffffff);
+}
+
 .landing-nav-logo {
   width: 36px;
   height: 36px;
@@ -320,19 +329,48 @@
 }
 
 .landing-neural-core {
-  fill: url(#glow);
   fill: #0f1220;
-  stroke: url(#glow);
   stroke: var(--landing-purple);
   stroke-width: 2;
   filter: drop-shadow(0 0 12px rgba(108, 140, 255, 0.6));
 }
 
-.landing-neural-label {
-  fill: var(--text);
-  font-size: 22px;
-  font-weight: 800;
-  font-family: Inter, system-ui, sans-serif;
+.landing-neural-logo {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 2;
+}
+
+.landing-feature-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  margin-bottom: 16px;
+  border-radius: 12px;
+  background: rgba(108, 140, 255, 0.12);
+  border: 1px solid rgba(108, 140, 255, 0.2);
+  color: var(--landing-purple);
+}
+
+.landing-feature-icon svg {
+  width: 24px;
+  height: 24px;
+}
+
+.landing-timeline-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--landing-purple);
+}
+
+.landing-timeline-icon svg {
+  width: 20px;
+  height: 20px;
 }
 
 /* Sections */
@@ -388,19 +426,6 @@
 
 .landing-feature-card:hover {
   transform: translateY(-4px);
-}
-
-.landing-feature-icon {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 44px;
-  height: 44px;
-  margin-bottom: 16px;
-  border-radius: 12px;
-  font-size: 22px;
-  background: rgba(108, 140, 255, 0.12);
-  border: 1px solid rgba(108, 140, 255, 0.2);
 }
 
 .landing-feature-card h3 {

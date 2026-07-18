@@ -1,11 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-
-function mediaIcon(type) {
-  if (type === 'image') return '🖼'
-  if (type === 'video') return '▶'
-  if (type === 'voice' || type === 'audio') return '🎙'
-  return '●'
-}
+import { MediaTypeIcon } from './Icons.jsx'
 
 export default function MediaPage({ userId }) {
   const [assets, setAssets] = useState([])
@@ -72,7 +66,9 @@ export default function MediaPage({ userId }) {
                 {asset.type === 'image' && asset.url ? (
                   <img src={asset.url} alt="" />
                 ) : (
-                  <span className="media-card-icon">{mediaIcon(asset.type)}</span>
+                  <span className="media-card-icon">
+                    <MediaTypeIcon type={asset.type} />
+                  </span>
                 )}
               </div>
               <div className="media-card-meta">

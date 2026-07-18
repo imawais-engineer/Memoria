@@ -1,5 +1,7 @@
 import { useNavigate } from 'react-router-dom'
 import { useEffect, useRef } from 'react'
+import MemoriaLogo from './MemoriaLogo.jsx'
+import { FeatureIcon, StepIcon } from './Icons.jsx'
 import './Landing.css'
 
 const GITHUB_URL = 'https://github.com/imawais-engineer/Memoria'
@@ -14,37 +16,37 @@ const BENCHMARK = {
 
 const FEATURES = [
   {
-    icon: '🧠',
+    icon: 'memory',
     title: 'Persistent Cross-Session Memory',
     description:
       'Facts extracted from every conversation are embedded and recalled across separate chats and return visits.',
   },
   {
-    icon: '🌊',
+    icon: 'wave',
     title: 'Intelligent Forgetting & Consolidation',
     description:
       'Daily decay archives stale memories; weekly Qwen clustering merges related facts into concise summaries.',
   },
   {
-    icon: '🔗',
+    icon: 'link',
     title: 'Personal Intelligence (Global Memory Access)',
     description:
       'Connect insights across all your sessions with a toggleable global memory layer powered by hybrid vector search.',
   },
   {
-    icon: '🕶️',
+    icon: 'shield',
     title: 'MemoryLess Incognito Mode',
     description:
       'Start private chats that never write to long-term storage — perfect for sensitive topics or one-off questions.',
   },
   {
-    icon: '⚡',
+    icon: 'bolt',
     title: 'MCP Skills Server (Interoperable)',
     description:
       'Expose memory tools via MCP so external agents can query, strengthen, or forget user knowledge programmatically.',
   },
   {
-    icon: '👍',
+    icon: 'feedback',
     title: 'Real-time Learning from Feedback',
     description:
       'Thumbs-up and thumbs-down on replies strengthen or weaken the memories that informed them in real time.',
@@ -53,22 +55,22 @@ const FEATURES = [
 
 const STEPS = [
   {
-    icon: '💬',
+    icon: 'chat',
     title: 'Chat Naturally',
     description: 'Talk to Memoria like any assistant — or use /imagine, /gen_video, /gen_voice in chat.',
   },
   {
-    icon: '✨',
+    icon: 'spark',
     title: 'Qwen Extracts Memories',
     description: 'Qwen function calling pulls structured facts from each turn and embeds them with text-embedding-v3.',
   },
   {
-    icon: '🗄️',
+    icon: 'database',
     title: 'Smart Storage + Decay',
     description: 'PostgreSQL + pgvector stores vectors; Celery Beat handles decay and consolidation on schedule.',
   },
   {
-    icon: '🎯',
+    icon: 'target',
     title: 'Next Session — Already Knows You',
     description: 'Hybrid retrieval packs the most relevant memories into every reply, even days later.',
   },
@@ -96,10 +98,10 @@ function NeuralVisual() {
           </g>
         ))}
         <circle className="landing-neural-core" cx="160" cy="160" r="28" />
-        <text x="160" y="168" textAnchor="middle" className="landing-neural-label">
-          M
-        </text>
       </svg>
+      <div className="landing-neural-logo">
+        <MemoriaLogo size="md" />
+      </div>
     </div>
   )
 }
@@ -165,8 +167,7 @@ export default function Landing({ onGetStarted }) {
 
       <header className="landing-nav">
         <a href="#top" className="landing-nav-brand">
-          <span className="landing-nav-logo">M</span>
-          <span className="landing-nav-name">Memoria</span>
+          <MemoriaLogo size="sm" showName nameClassName="landing-nav-name" />
         </a>
         <nav className="landing-nav-links" aria-label="Primary">
           <a href="#features">Features</a>
@@ -191,7 +192,7 @@ export default function Landing({ onGetStarted }) {
             </p>
             <div className="landing-hero-actions">
               <button type="button" className="landing-btn landing-btn--primary landing-btn--lg" onClick={goToAuth}>
-                Get Started Free
+                Get Started
               </button>
               <a
                 href={GITHUB_URL}
@@ -218,7 +219,7 @@ export default function Landing({ onGetStarted }) {
             {FEATURES.map((feature) => (
               <article key={feature.title} className="landing-glass-card landing-feature-card">
                 <span className="landing-feature-icon" aria-hidden="true">
-                  {feature.icon}
+                  <FeatureIcon name={feature.icon} />
                 </span>
                 <h3>{feature.title}</h3>
                 <p>{feature.description}</p>
@@ -240,7 +241,7 @@ export default function Landing({ onGetStarted }) {
               <li key={step.title} className="landing-timeline-step">
                 <div className="landing-timeline-marker">
                   <span className="landing-timeline-icon" aria-hidden="true">
-                    {step.icon}
+                    <StepIcon name={step.icon} />
                   </span>
                   <span className="landing-timeline-num">{index + 1}</span>
                 </div>
@@ -304,10 +305,10 @@ export default function Landing({ onGetStarted }) {
           <div className="landing-section-header">
             <h2 className="landing-section-title">Start Building Your Personal Memory</h2>
             <p className="landing-section-lead">
-              Create a free account in seconds. Your memories persist across every session.
+              Create an account in seconds. Your memories persist across every session.
             </p>
             <button type="button" className="landing-btn landing-btn--primary landing-btn--lg" onClick={goToAuth}>
-              Get Started Free
+              Get Started
             </button>
           </div>
         </section>
@@ -329,7 +330,7 @@ export default function Landing({ onGetStarted }) {
           </a>
         </div>
         <p className="landing-footer-tagline">
-          Built with ❤️ on Alibaba Cloud &amp; Qwen Cloud · Track 1 – MemoryAgent
+          Built on Alibaba Cloud &amp; Qwen Cloud · Track 1 – MemoryAgent
         </p>
       </footer>
     </div>

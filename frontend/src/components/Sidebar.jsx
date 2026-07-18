@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import MemoriaLogo from './MemoriaLogo.jsx'
 
 export default function Sidebar({
   userId,
@@ -102,8 +103,12 @@ export default function Sidebar({
     <aside className={`sidebar${open ? '' : ' sidebar--closed'}`} aria-hidden={!open}>
       <div className="sidebar-inner">
         <div className="sidebar-brand">
-          <div className="sidebar-brand-name">Memoria</div>
-          <div className="sidebar-brand-tagline">Personal AI with long-term memory</div>
+          <MemoriaLogo
+            size="md"
+            showName
+            tagline="Personal AI with long-term memory"
+            nameClassName="sidebar-brand-name"
+          />
         </div>
 
         <button
@@ -281,6 +286,9 @@ export default function Sidebar({
               </button>
               <button type="button" role="menuitem" onClick={() => navigate('feedback')}>
                 Feedback
+              </button>
+              <button type="button" role="menuitem" onClick={() => navigate('about')}>
+                About
               </button>
               <div className="sidebar-profile-menu-divider" />
               <button
