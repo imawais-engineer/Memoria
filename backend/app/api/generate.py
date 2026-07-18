@@ -6,12 +6,13 @@ import logging
 from uuid import UUID
 
 import redis.asyncio as redis
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, Header, HTTPException, Query
 from pydantic import BaseModel, Field
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.sessions import ensure_session_exists, touch_session_on_message
+from app.config import get_settings
 from app.core.dashscope_client import (
     CHAT_MODELS,
     generate_image,
@@ -26,6 +27,13 @@ from app.services.voice_generation import generate_voice_overview
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api", tags=["generate"])
+
+
+def require_token(x_api_token: str = Header(default="")) -> None:
+    """Simple fixed-token auth for destructive endpoints (demo only)."""
+
+    if x_api_token != get_settings().demo_api_token:
+        raise HTTPException(status_code=401, detail="Invalid or missing API token")
 
 
 class GenerateImageRequest(BaseModel):
@@ -254,3 +262,31 @@ async def list_assets(
             for asset in assets
         ],
     )
+
+
+@router.delete("/generate/assets/{asset_id}")
+async def delete_asset(
+    asset_id: str,
+    user_id: str = Query(..., min_length=1),
+    db: AsyncSession = Depends(get_db),
+    _: None = Depends(require_token),
+) -> dict:
+    """Permanently delete a generated asset for the given user."""
+
+    try:
+        asset_uuid = UUID(asset_id)
+        user_uuid = UUID(user_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid asset or user id")
+
+    result = await db.execute(
+        delete(GeneratedAsset).where(
+            GeneratedAsset.id == asset_uuid,
+            GeneratedAsset.user_id == user_uuid,
+        )
+    )
+    await db.commit()
+
+    if result.rowcount == 0:
+        raise HTTPException(status_code=404, detail="Asset not found")
+    return {"deleted": asset_id}

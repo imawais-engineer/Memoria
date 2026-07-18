@@ -37,6 +37,7 @@ const SLASH_COMMANDS = [
     endpoint: '/api/generate/image',
     color: '#22c55e',
     hint: 'Generate an image',
+    description: '/imagine <prompt> – generate an image',
     modelLabel: 'Image Generation (wan2.1-t2i-plus)',
   },
   {
@@ -46,6 +47,7 @@ const SLASH_COMMANDS = [
     endpoint: '/api/generate/video',
     color: '#3b82f6',
     hint: 'Generate a video',
+    description: '/gen_video <prompt> – generate a video',
     modelLabel: 'Video Generation (wan2.1-t2v-turbo)',
   },
   {
@@ -55,6 +57,7 @@ const SLASH_COMMANDS = [
     endpoint: '/api/generate/voice',
     color: '#a855f7',
     hint: 'Voice overview',
+    description: '/gen_voice <prompt> – generate a voice overview',
     modelLabel: 'Voice Generation (qwen3-tts-flash)',
   },
   {
@@ -62,36 +65,42 @@ const SLASH_COMMANDS = [
     kind: 'memorize',
     color: '#f59e0b',
     hint: 'Store a fact manually',
+    description: '/memorize <fact> – manually store a memory',
   },
   {
     prefix: '/create_task',
     kind: 'task-create',
     color: '#0d9488',
     hint: 'Create a task',
+    description: '/create_task <title> – create a task',
   },
   {
     prefix: '/tasks_list',
     kind: 'task-list',
     color: '#06b6d4',
     hint: 'List pending tasks',
+    description: '/tasks_list – list pending tasks',
   },
   {
     prefix: '/task_complete',
     kind: 'task-complete',
     color: '#14b8a6',
     hint: 'Mark task complete',
+    description: '/task_complete <task_id> – mark a task as done',
   },
   {
     prefix: '/list_memory',
     kind: 'memory-list',
     color: '#d97706',
     hint: 'List memories (scope follows PI)',
+    description: '/list_memory – list memories (scoped by Personal Intelligence)',
   },
   {
     prefix: '/forget_memory',
     kind: 'memory-forget',
     color: '#fbbf24',
     hint: 'Forget by ID or ALL',
+    description: '/forget_memory <ID|ALL> – forget a memory',
   },
 ]
 
@@ -1355,6 +1364,9 @@ export default function Chat({
           <div className="omni-input-area">
             {slashMenuOpen && slashMenuItems.length > 0 && (
               <ul className="slash-menu" role="listbox" aria-label="Slash commands">
+                <li className="slash-menu-header" aria-hidden="true">
+                  Pick a command and hit Tab to autofill.
+                </li>
                 {slashMenuItems.map((cmd, index) => (
                   <li key={cmd.prefix}>
                     <button
@@ -1368,8 +1380,7 @@ export default function Chat({
                         insertSlashCommand(cmd)
                       }}
                     >
-                      <span className="slash-menu-cmd">{cmd.prefix}</span>
-                      <span className="slash-menu-hint">{cmd.hint}</span>
+                      <span className="slash-menu-cmd">{cmd.description || cmd.prefix}</span>
                     </button>
                   </li>
                 ))}
@@ -1418,6 +1429,7 @@ export default function Chat({
                 type="button"
                 className={`action-chip${disabled ? ' disabled' : ''}`}
                 style={{ '--chip-color': cmd.color }}
+                title={cmd.description || cmd.hint}
                 onClick={() => {
                   if (disabled) {
                     setError('Media generation is disabled in MemoryLess sessions.')

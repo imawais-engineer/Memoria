@@ -64,6 +64,24 @@ SYSTEM_PROMPT_TEMPLATE = (
     "proper Markdown headings when helpful, and tables where appropriate."
 )
 
+MEMORIA_CAPABILITIES = (
+    "You are an AI assistant inside Memoria – a self‑evolving personal memory agent.\n"
+    "Memoria stores user‑centric facts (preferences, goals, identity) across sessions.\n"
+    "It supports slash commands typed by the user:\n"
+    "/imagine <prompt>        – generate an image\n"
+    "/gen_video <prompt>      – generate a video\n"
+    "/gen_voice <prompt>      – generate a voice overview\n"
+    "/memorize <fact>         – manually store a memory\n"
+    "/create_task <title>     – create a task\n"
+    "/tasks_list              – list pending tasks\n"
+    "/task_complete <id>      – mark a task as complete\n"
+    "/list_memory             – list memories (scoped by Personal Intelligence)\n"
+    "/forget_memory <id|ALL>  – forget one or all memories\n"
+    "When a user sends a slash command without required parameters (e.g., just\n"
+    "'/task_complete'), respond with a helpful reminder of the correct syntax,\n"
+    "don't treat it as a normal conversation."
+)
+
 
 def _memory_mode_label(is_memoryless: bool, global_memory_enabled: bool) -> str:
     """Return the Personal Intelligence / MemoryLess status line for the prompt."""
@@ -271,6 +289,7 @@ async def _prepare_chat_turn(
     if reflection_text:
         system_prompt += f"\n\nLatest reflection about the user: {reflection_text}"
     system_prompt += f"\n\n{format_persona_prompt(user_persona)}"
+    system_prompt += f"\n\n{MEMORIA_CAPABILITIES}"
     if session_summary:
         system_prompt = (
             f"Summary of the conversation so far: {session_summary}\n\n"

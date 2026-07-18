@@ -1,7 +1,35 @@
 import { useCallback, useEffect, useState } from 'react'
 import { DEMO_TOKEN } from '../App.jsx'
 
-const TYPE_ORDER = ['core', 'episodic', 'semantic', 'procedural']
+const TYPE_SORT_ORDER = [
+  'core',
+  'goal',
+  'preference',
+  'episodic',
+  'semantic',
+  'procedural',
+]
+
+const TYPE_BAR_COLORS = {
+  core: '#3b82f6',
+  goal: '#f97316',
+  preference: '#ec4899',
+  episodic: '#22c55e',
+  semantic: '#eab308',
+  procedural: '#8b5cf6',
+}
+
+function sortMemoryTypes(types) {
+  const keys = Object.keys(types || {})
+  return [...keys].sort((a, b) => {
+    const ai = TYPE_SORT_ORDER.indexOf(a)
+    const bi = TYPE_SORT_ORDER.indexOf(b)
+    if (ai === -1 && bi === -1) return a.localeCompare(b)
+    if (ai === -1) return 1
+    if (bi === -1) return -1
+    return ai - bi
+  })
+}
 
 const EMPTY_STATS = {
   total_memories: 0,
@@ -9,7 +37,7 @@ const EMPTY_STATS = {
   summaries_count: 0,
   avg_importance: 0,
   last_consolidation: null,
-  types: Object.fromEntries(TYPE_ORDER.map((type) => [type, 0])),
+  types: {},
 }
 
 function formatDate(iso) {
@@ -22,13 +50,19 @@ function formatDate(iso) {
 }
 
 function TypeBarChart({ types }) {
-  const maxCount = Math.max(...TYPE_ORDER.map((type) => types[type] || 0), 1)
+  const orderedTypes = sortMemoryTypes(types)
+  const maxCount = Math.max(...orderedTypes.map((type) => types[type] || 0), 1)
+
+  if (!orderedTypes.length) {
+    return <div className="muted">No memory types recorded yet.</div>
+  }
 
   return (
     <div className="type-chart">
-      {TYPE_ORDER.map((type) => {
+      {orderedTypes.map((type) => {
         const count = types[type] || 0
         const width = count === 0 ? 0 : Math.max((count / maxCount) * 100, 6)
+        const barColor = TYPE_BAR_COLORS[type] || 'var(--accent-blue)'
 
         return (
           <div key={type} className="type-chart-row">
@@ -36,7 +70,7 @@ function TypeBarChart({ types }) {
             <div className="type-chart-track" aria-hidden="true">
               <div
                 className={`type-chart-bar bar-${type}`}
-                style={{ width: `${width}%` }}
+                style={{ width: `${width}%`, background: barColor }}
               />
             </div>
             <span className="type-chart-count">{count}</span>

@@ -45,6 +45,8 @@ DECAY_RATES: dict[str, float] = {
     "semantic": 0.01,
     "episodic": 0.02,
     "procedural": 0.005,
+    "goal": 0.01,
+    "preference": 0.01,
 }
 DEFAULT_DECAY_RATE = 0.01
 CONFLICT_IMPORTANCE_BOOST = 0.1
@@ -79,6 +81,8 @@ EXTRACT_MEMORIES_TOOL: list[dict[str, Any]] = [
                                         "episodic",
                                         "semantic",
                                         "procedural",
+                                        "goal",
+                                        "preference",
                                     ],
                                 },
                                 "importance": {

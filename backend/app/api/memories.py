@@ -20,9 +20,6 @@ from app.memory.models import Memory
 
 router = APIRouter(prefix="/api", tags=["memories"])
 
-MEMORY_TYPES = ("core", "episodic", "semantic", "procedural")
-
-
 class MemoryOut(BaseModel):
     """Memory representation for the frontend (embeddings excluded)."""
 
@@ -43,9 +40,7 @@ class MemoryStatsOut(BaseModel):
     summaries_count: int
     avg_importance: float
     last_consolidation: datetime | None
-    types: dict[str, int] = Field(
-        default_factory=lambda: {memory_type: 0 for memory_type in MEMORY_TYPES}
-    )
+    types: dict[str, int] = Field(default_factory=dict)
 
 
 def require_token(x_api_token: str = Header(default="")) -> None:
@@ -112,9 +107,7 @@ async def memory_stats(
         )
     ).all()
 
-    types = {memory_type: 0 for memory_type in MEMORY_TYPES}
-    for memory_type, count in type_rows:
-        types[str(memory_type)] = int(count)
+    types = {str(memory_type): int(count) for memory_type, count in type_rows}
 
     return MemoryStatsOut(
         total_memories=total_memories,
