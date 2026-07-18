@@ -10,9 +10,10 @@ export default function HelpPage() {
         <section className="help-section">
           <h3>Personal Intelligence</h3>
           <p>
-            Toggle Personal Intelligence (PI) in the chat toolbar. When ON, Memoria can
-            access memories across all your chats. When OFF, only this session&apos;s
-            context and essential facts are used.
+            Toggle Personal Intelligence (PI) in the chat toolbar. When <strong>ON</strong>,
+            Memoria can access memories from all your chats. When <strong>OFF</strong>, only
+            this chat&apos;s conversation memory is used (plus any facts you saved manually
+            with <code>/memorize</code>).
           </p>
         </section>
 

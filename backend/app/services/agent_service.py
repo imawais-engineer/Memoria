@@ -105,7 +105,7 @@ def _memory_mode_label(is_memoryless: bool, global_memory_enabled: bool) -> str:
         )
     return (
         "[Personal Intelligence is OFF. You are using only this session's "
-        "context and the user's essential facts.]"
+        "conversation memory and manually saved core facts.]"
     )
 
 
@@ -284,11 +284,9 @@ async def _prepare_chat_turn(
         is_memoryless=is_memoryless,
         global_memory_enabled=global_memory_enabled,
     )
-    reflection_text = (
-        None
-        if is_memoryless
-        else await get_latest_reflection(user_id, db_session)
-    )
+    reflection_text = None
+    if not is_memoryless and global_memory_enabled:
+        reflection_text = await get_latest_reflection(user_id, db_session)
 
     session_summary = await redis_client.get(f"{session_key}:summary")
     memory_display = memory_context or "(none)"
