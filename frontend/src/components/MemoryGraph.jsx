@@ -141,51 +141,55 @@ export default function MemoryGraph({ userId, username = null, sessionId = null 
         </div>
       </section>
 
-      <div className="table-tools">
-        <div className="muted">
-          {loading
-            ? 'Loading…'
-            : `${sessionMemories.length} memories for ${userLabel}`}
+      <div className="memory-content">
+        <div className="table-tools">
+          <div className="muted">
+            {loading
+              ? 'Loading…'
+              : `${sessionMemories.length} memories for ${userLabel}`}
+          </div>
+        </div>
+
+        <div className="memory-table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Type</th>
+                <th>Content</th>
+                <th>Importance</th>
+                <th>Created</th>
+                <th>Decay</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              {sessionMemories.map((m) => (
+                <tr key={m.id}>
+                  <td>
+                    <span className={`badge ${m.type}`}>{m.type}</span>
+                  </td>
+                  <td>{m.content}</td>
+                  <td>{m.importance.toFixed(2)}</td>
+                  <td className="muted">{formatDate(m.created_at)}</td>
+                  <td className="muted">{m.decay_rate}</td>
+                  <td>
+                    <button className="forget" onClick={() => forget(m.id)}>
+                      Forget
+                    </button>
+                  </td>
+                </tr>
+              ))}
+              {!loading && sessionMemories.length === 0 && (
+                <tr>
+                  <td colSpan="6" className="muted empty-state-cell">
+                    No memories in this chat yet.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
         </div>
       </div>
-
-      <table>
-        <thead>
-          <tr>
-            <th>Type</th>
-            <th>Content</th>
-            <th>Importance</th>
-            <th>Created</th>
-            <th>Decay</th>
-            <th></th>
-          </tr>
-        </thead>
-        <tbody>
-          {sessionMemories.map((m) => (
-            <tr key={m.id}>
-              <td>
-                <span className={`badge ${m.type}`}>{m.type}</span>
-              </td>
-              <td>{m.content}</td>
-              <td>{m.importance.toFixed(2)}</td>
-              <td className="muted">{formatDate(m.created_at)}</td>
-              <td className="muted">{m.decay_rate}</td>
-              <td>
-                <button className="forget" onClick={() => forget(m.id)}>
-                  Forget
-                </button>
-              </td>
-            </tr>
-          ))}
-          {!loading && sessionMemories.length === 0 && (
-            <tr>
-              <td colSpan="6" className="muted empty-state-cell">
-                No memories in this chat yet.
-              </td>
-            </tr>
-          )}
-        </tbody>
-      </table>
       {error && <div className="error">{error}</div>}
     </div>
   )

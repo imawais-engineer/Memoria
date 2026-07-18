@@ -33,6 +33,7 @@ html,
 body,
 #root {
   height: 100%;
+  overflow-x: hidden;
 }
 
 body {
@@ -42,6 +43,33 @@ body {
   background: radial-gradient(1200px 600px at 20% -10%, #1c2140 0%, var(--canvas-bg) 55%);
   color: var(--text-primary);
   min-height: 100vh;
+  overflow-x: hidden;
+}
+
+/* Hide scrollbars globally except the chat message list */
+:not(.chat-window) {
+  scrollbar-width: none;
+}
+
+:not(.chat-window)::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+.chat-window {
+  scrollbar-width: thin;
+  scrollbar-color: #333 transparent;
+}
+
+.chat-window::-webkit-scrollbar {
+  display: block;
+  width: 6px;
+}
+
+.chat-window::-webkit-scrollbar-thumb {
+  background: #333;
+  border-radius: 3px;
 }
 
 h1, h2, h3, h4, .title, .sidebar-brand-name {
@@ -267,9 +295,8 @@ select {
   display: flex;
   flex-direction: column;
   gap: 2px;
-  overflow-y: auto;
-  scrollbar-width: thin;
-  scrollbar-color: #333 transparent;
+  overflow: hidden;
+  min-height: 0;
 }
 
 .sidebar-chats-section {
@@ -277,12 +304,13 @@ select {
   min-height: 0;
   display: flex;
   flex-direction: column;
+  overflow: hidden;
 }
 
 .sidebar-chats-section .sidebar-chat-list {
   flex: 1;
   min-height: 0;
-  max-height: calc(100vh - 400px);
+  max-height: none;
 }
 
 .sidebar-empty {
@@ -575,6 +603,23 @@ select {
   overflow: hidden;
 }
 
+.canvas-inner {
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+  max-width: 900px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  padding: 56px 40px 0;
+  overflow: hidden;
+}
+
+.canvas--sidebar-closed .canvas-inner {
+  padding-left: 80px;
+  padding-right: 80px;
+}
+
 .canvas-error {
   position: absolute;
   bottom: 120px;
@@ -603,20 +648,13 @@ select {
   align-items: flex-start;
   justify-content: space-between;
   gap: 16px;
-  padding: 14px 24px 8px;
+  padding: 0 0 8px;
   flex-shrink: 0;
 }
 
 .chat-toolbar--sidebar-closed {
-  padding-left: 56px;
-  padding-right: 80px;
-}
-
-.canvas--sidebar-closed .chat-window,
-.canvas--sidebar-closed .omni-wrap,
-.canvas--sidebar-closed .memoryless-banner {
-  padding-left: 80px;
-  padding-right: 80px;
+  padding-left: 0;
+  padding-right: 0;
 }
 
 .collapsed-top-bar {
@@ -906,7 +944,7 @@ select {
 }
 
 .memoryless-banner {
-  margin: 0 24px 8px;
+  margin: 0 0 8px;
   padding: 8px 12px;
   border-radius: 10px;
   background: rgba(180, 180, 180, 0.08);
@@ -926,10 +964,11 @@ select {
 .chat-window {
   flex: 1;
   overflow-y: auto;
+  overflow-x: hidden;
   display: flex;
   flex-direction: column;
   gap: 18px;
-  padding: 12px 24px 24px;
+  padding: 12px 0 24px;
   scroll-behavior: smooth;
   scrollbar-width: thin;
   scrollbar-color: #333 transparent;
@@ -1104,8 +1143,10 @@ select {
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-card);
   margin: 0;
-  overflow-x: auto;
+  overflow-x: hidden;
   padding: 0.85em;
+  white-space: pre-wrap;
+  word-break: break-word;
 }
 .markdown-content pre code {
   background: none;
@@ -1207,7 +1248,7 @@ select {
 
 .omni-wrap {
   flex-shrink: 0;
-  padding: 0 24px 20px;
+  padding: 0 0 20px;
   display: flex;
   flex-direction: column;
   gap: 10px;
@@ -1220,7 +1261,7 @@ select {
   gap: 8px;
   background: var(--panel-overlay);
   border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-input);
+  border-radius: 12px;
   padding: 10px 12px;
   transition: border-color 0.15s ease;
 }
@@ -1277,6 +1318,11 @@ select {
   line-height: 1.45;
   max-height: 40vh;
   overflow-y: auto;
+  scrollbar-width: none;
+}
+
+.composer-textarea::-webkit-scrollbar {
+  display: none;
 }
 
 .composer-textarea--highlight {
@@ -1395,9 +1441,12 @@ select {
   background: transparent;
   border: none;
   border-radius: 0;
-  padding: 20px 24px 32px;
-  overflow-y: auto;
+  padding: 0 0 24px;
+  overflow: hidden;
   height: 100%;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
 }
 
 .btn {
@@ -1620,6 +1669,24 @@ select {
   margin-bottom: 8px;
 }
 
+.stats-section {
+  flex-shrink: 0;
+}
+
+.memory-content {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.memory-table-wrap {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
 .stats-title,
 .persona-title {
   margin: 0;
@@ -1667,6 +1734,13 @@ select {
   width: 100%;
   border-collapse: collapse;
   font-size: 13px;
+  table-layout: fixed;
+}
+
+.panel table td:nth-child(2) {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .panel table th,
@@ -1915,12 +1989,14 @@ select {
     display: none;
   }
 
-  .chat-toolbar,
-  .chat-window,
-  .omni-wrap,
-  .panel {
-    padding-left: 16px;
-    padding-right: 16px;
+  .canvas-inner {
+    padding-left: 56px;
+    padding-right: 24px;
+  }
+
+  .canvas--sidebar-closed .canvas-inner {
+    padding-left: 56px;
+    padding-right: 24px;
   }
 
   .pi-switch-label {
@@ -1931,15 +2007,34 @@ select {
 /* ─── Shared page panels ─────────────────────────────────── */
 
 .page-panel {
-  max-width: 720px;
-  margin: 0 auto;
-  padding: 24px;
-  overflow-y: auto;
+  width: 100%;
+  max-width: 100%;
+  margin: 0;
+  padding: 0 0 24px;
+  overflow: hidden;
   height: 100%;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.persona-panel {
+  overflow: hidden;
 }
 
 .page-header {
   margin-bottom: 24px;
+  flex-shrink: 0;
+}
+
+.help-content {
+  overflow: hidden;
+  flex: 1;
+  min-height: 0;
+}
+
+.settings-form {
+  overflow: hidden;
 }
 
 .page-title {
@@ -1984,8 +2079,12 @@ select {
 
 .media-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
-  gap: 14px;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 12px;
+  overflow: hidden;
+  flex: 1;
+  min-height: 0;
+  align-content: start;
 }
 
 .media-card {
@@ -2114,6 +2213,9 @@ select {
   display: flex;
   flex-direction: column;
   gap: 10px;
+  overflow: hidden;
+  flex: 1;
+  min-height: 0;
 }
 
 .task-item {
@@ -2261,17 +2363,18 @@ select {
 /* ─── About page ─────────────────────────────────────────── */
 
 .about-page {
-  max-width: 960px;
+  max-width: 100%;
+  overflow: hidden;
 }
 
 .about-hero {
-  margin-bottom: 32px;
-  padding-bottom: 24px;
+  margin-bottom: 20px;
+  padding-bottom: 16px;
   border-bottom: 1px solid var(--border);
 }
 
 .about-section {
-  margin-bottom: 36px;
+  margin-bottom: 20px;
 }
 
 .about-section-title {
@@ -2434,12 +2537,12 @@ select {
 }
 
 .about-chart-wrap {
-  height: 220px;
+  height: 160px;
   position: relative;
 }
 
 .about-chart-wrap--pie {
-  height: 260px;
+  height: 180px;
 }
 
 .about-chart-card--pie {
@@ -2447,7 +2550,7 @@ select {
 }
 
 .about-table-wrap {
-  overflow-x: auto;
+  overflow: hidden;
   border-radius: 12px;
   border: 1px solid var(--border);
 }

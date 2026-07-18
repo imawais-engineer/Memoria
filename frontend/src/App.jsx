@@ -580,7 +580,9 @@ function MainApp({ auth, onAuth, onLogout }) {
 
         <main className={`canvas${sidebarOpen ? '' : ' canvas--sidebar-closed'}`}>
           <div className="canvas-body">
-            {renderMainView()}
+            <div className="canvas-inner">
+              {renderMainView()}
+            </div>
           </div>
           {sessionsError && <div className="canvas-error">{sessionsError}</div>}
         </main>
