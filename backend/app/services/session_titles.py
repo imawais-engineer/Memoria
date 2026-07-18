@@ -11,18 +11,18 @@ logger = logging.getLogger(__name__)
 MAX_TITLE_LENGTH = 80
 
 SLASH_HELP_REPLY = (
-    "Available commands:\n\n"
-    "/imagine <prompt> – Generate an image (AI)\n"
-    "/gen_video <prompt> – Generate a video (AI)\n"
-    "/gen_voice <prompt> – Create a voice overview (AI)\n"
-    "/memorize <fact> – Store a fact manually (no AI)\n"
-    "/create_task <title> – Create a task (no AI)\n"
-    "/tasks_list – List pending tasks (no AI)\n"
-    "/task_complete <ID> – Mark a task complete (no AI)\n"
-    "/list_memory – List memories (no AI; all memories when PI is ON, "
-    "current chat only when PI is OFF)\n"
-    "/forget_memory <ID|ALL> – Delete memories (no AI; scope follows PI like "
-    "/list_memory)"
+    "📋 **Available Commands**\n\n"
+    "| Command | Description | AI Cost |\n"
+    "|---------|-------------|--------|\n"
+    "| `/imagine <prompt>` | Generate an image | AI |\n"
+    "| `/gen_video <prompt>` | Generate a video | AI |\n"
+    "| `/gen_voice <prompt>` | Create a voice overview | AI |\n"
+    "| `/memorize <fact>` | Store a fact manually | Free |\n"
+    "| `/create_task <title>` | Create a task | Free |\n"
+    "| `/tasks_list` | List pending tasks | Free |\n"
+    "| `/task_complete <ID>` | Mark a task as done | Free |\n"
+    "| `/list_memory` | List memories | Free |\n"
+    "| `/forget_memory <ID\\|ALL>` | Delete memories | Free |"
 )
 
 _MEDIA_PREFIXES: tuple[tuple[str, str], ...] = (

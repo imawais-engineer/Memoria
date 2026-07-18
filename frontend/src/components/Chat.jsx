@@ -7,7 +7,7 @@ import 'katex/dist/katex.min.css'
 import ModelDropdown from './ModelDropdown.jsx'
 import MemoriaLogo from './MemoriaLogo.jsx'
 import { DEMO_TOKEN } from '../App.jsx'
-import { APP_TAGLINE_SUFFIX } from '../constants/branding.js'
+import { APP_NAME_DISPLAY, APP_TAGLINE_SUFFIX } from '../constants/branding.js'
 import {
   IconCheck,
   IconCopy,
@@ -1195,8 +1195,10 @@ export default function Chat({
           {!sidebarOpen && (
             <div className="collapsed-top-bar">
               <MemoriaLogo
-                size="sm"
+                size="md"
                 showName
+                name={APP_NAME_DISPLAY}
+                matchIconSize
                 tagline={APP_TAGLINE_SUFFIX}
                 layout="stacked"
                 nameClassName="collapsed-brand"

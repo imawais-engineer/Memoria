@@ -10,7 +10,6 @@ const About = lazy(() => import('./components/About.jsx'))
 const FeedbackPage = lazy(() => import('./components/FeedbackPage.jsx'))
 const HelpPage = lazy(() => import('./components/HelpPage.jsx'))
 const MediaPage = lazy(() => import('./components/MediaPage.jsx'))
-const MemorizePage = lazy(() => import('./components/MemorizePage.jsx'))
 const MemoryGraph = lazy(() => import('./components/MemoryGraph.jsx'))
 const Persona = lazy(() => import('./components/Persona.jsx'))
 const SettingsPage = lazy(() => import('./components/SettingsPage.jsx'))
@@ -514,9 +513,6 @@ function MainApp({ auth, onAuth, onLogout }) {
             onSaved={handlePersonaSaved}
           />
         )
-        break
-      case 'memorize':
-        content = <MemorizePage userId={userId} />
         break
       case 'media':
         content = <MediaPage userId={userId} />

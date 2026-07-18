@@ -194,6 +194,11 @@ select {
   white-space: nowrap;
 }
 
+.memoria-logo-name--match-icon {
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
 .memoria-logo-tagline {
   font-size: 12px;
   color: var(--text-muted);
@@ -203,10 +208,6 @@ select {
 
 .memoria-logo-mark {
   flex-shrink: 0;
-}
-
-.sidebar-brand-name {
-  font-size: 18px;
 }
 
 .sidebar-brand .memoria-logo-tagline {
@@ -715,12 +716,6 @@ select {
 
 .collapsed-top-bar .memoria-logo--stacked {
   gap: 2px;
-}
-
-.collapsed-top-bar .memoria-logo-name,
-.collapsed-brand {
-  font-size: 14px;
-  font-weight: 600;
 }
 
 .collapsed-top-bar .memoria-logo-tagline {

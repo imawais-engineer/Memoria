@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import MemoriaLogo from './MemoriaLogo.jsx'
-import { APP_TAGLINE_SUFFIX } from '../constants/branding.js'
+import { APP_NAME_DISPLAY, APP_TAGLINE_SUFFIX } from '../constants/branding.js'
 
 export default function Sidebar({
   userId,
@@ -108,8 +108,10 @@ export default function Sidebar({
       <div className="sidebar-inner">
         <div className="sidebar-brand">
           <MemoriaLogo
-            size="sm"
+            size="md"
             showName
+            name={APP_NAME_DISPLAY}
+            matchIconSize
             tagline={APP_TAGLINE_SUFFIX}
             layout="stacked"
             nameClassName="sidebar-brand-name"
@@ -168,10 +170,10 @@ export default function Sidebar({
           </button>
           <button
             type="button"
-            className={`sidebar-nav-link${activeView === 'memorize' ? ' active' : ''}`}
-            onClick={() => onNavigate('memorize')}
+            className={`sidebar-nav-link${activeView === 'tasks' ? ' active' : ''}`}
+            onClick={() => onNavigate('tasks')}
           >
-            Memorize
+            Tasks
           </button>
           <button
             type="button"
@@ -179,13 +181,6 @@ export default function Sidebar({
             onClick={() => onNavigate('media')}
           >
             Media
-          </button>
-          <button
-            type="button"
-            className={`sidebar-nav-link${activeView === 'tasks' ? ' active' : ''}`}
-            onClick={() => onNavigate('tasks')}
-          >
-            Tasks
           </button>
         </nav>
 

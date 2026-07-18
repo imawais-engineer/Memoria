@@ -29,8 +29,8 @@ export default function HelpPage() {
           <h3>Memories</h3>
           <p>
             Memoria automatically extracts memories from your conversations. You can also
-            add memories manually via the Memorize page, or ask the AI to forget specific
-            facts in chat. View and manage all memories on the Memories tab.
+            add memories manually with <code>/memorize &lt;fact&gt;</code> in chat, or ask
+            the AI to forget specific facts. View and manage all memories on the Memories tab.
           </p>
         </section>
 

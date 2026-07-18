@@ -2,6 +2,9 @@
 
 export const APP_NAME = 'Memoria'
 
+/** All-caps display name for sidebar/header branding. */
+export const APP_NAME_DISPLAY = 'MEMORIA'
+
 /** Full heading: Memoria – Self‑Evolving Personal AI with Human‑like Memory */
 export const APP_FULL_TAGLINE =
   'Memoria – Self‑Evolving Personal AI with Human‑like Memory'

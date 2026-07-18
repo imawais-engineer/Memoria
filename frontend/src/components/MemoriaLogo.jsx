@@ -1,3 +1,5 @@
+import { APP_NAME } from '../constants/branding.js'
+
 const SIZES = {
   xs: 24,
   sm: 28,
@@ -9,6 +11,8 @@ const SIZES = {
 export default function MemoriaLogo({
   size = 'md',
   showName = false,
+  name = APP_NAME,
+  matchIconSize = false,
   tagline = null,
   className = '',
   nameClassName = '',
@@ -17,6 +21,10 @@ export default function MemoriaLogo({
   const dim = SIZES[size] || SIZES.md
   const fontSize = Math.round(dim * 0.48)
   const isStacked = layout === 'stacked'
+
+  const nameStyle = matchIconSize
+    ? { fontSize: `${dim}px`, lineHeight: 1 }
+    : undefined
 
   return (
     <div
@@ -68,7 +76,12 @@ export default function MemoriaLogo({
         </text>
         </svg>
         {showName && (
-          <span className={`memoria-logo-name ${nameClassName}`.trim()}>Memoria</span>
+          <span
+            className={`memoria-logo-name${matchIconSize ? ' memoria-logo-name--match-icon' : ''} ${nameClassName}`.trim()}
+            style={nameStyle}
+          >
+            {name}
+          </span>
         )}
       </div>
       {tagline && <span className="memoria-logo-tagline">{tagline}</span>}
