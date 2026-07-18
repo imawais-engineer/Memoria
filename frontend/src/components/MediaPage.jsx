@@ -54,7 +54,7 @@ export default function MediaPage({ userId }) {
       )}
 
       {!loading && assets.length > 0 && (
-        <div className="media-grid">
+        <div className="media-grid hide-scrollbar">
           {assets.map((asset) => (
             <button
               key={asset.id}

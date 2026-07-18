@@ -53,14 +53,32 @@ def extract_memories_task(
 
     async def _run() -> None:
         async with async_session() as session:
-            await extract_and_store_memories(
-                conversation_text,
-                user_id,
-                message_id,
-                session,
-                session_id,
-                is_memoryless,
-            )
+            try:
+                created = await extract_and_store_memories(
+                    conversation_text,
+                    user_id,
+                    message_id,
+                    session,
+                    session_id,
+                    is_memoryless,
+                )
+                if not created:
+                    logger.warning(
+                        "extract_memories_task stored no memories "
+                        "(user_id=%s message_id=%s session_id=%s memoryless=%s)",
+                        user_id,
+                        message_id,
+                        session_id,
+                        is_memoryless,
+                    )
+            except Exception:
+                logger.exception(
+                    "extract_memories_task failed "
+                    "(user_id=%s message_id=%s session_id=%s)",
+                    user_id,
+                    message_id,
+                    session_id,
+                )
 
     _run_async(_run)
 

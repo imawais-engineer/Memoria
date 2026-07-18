@@ -112,6 +112,7 @@ function MainApp({ auth, onAuth, onLogout }) {
   const [sidebarOpen, setSidebarOpen] = useState(loadSidebarOpen)
   const [injectMedia, setInjectMedia] = useState(null)
   const [pendingChatEmpty, setPendingChatEmpty] = useState(true)
+  const [memoryRefreshNonce, setMemoryRefreshNonce] = useState(0)
 
   const userId = auth?.user_id
   const displayName = [auth?.first_name, auth?.last_name].filter(Boolean).join(' ')
@@ -490,6 +491,7 @@ function MainApp({ auth, onAuth, onLogout }) {
             onSessionTitleUpdate={handleSessionTitleUpdate}
             onGlobalMemoryToggle={handleGlobalMemoryToggle}
             onPendingChatEmptyChange={setPendingChatEmpty}
+            onMemoriesChanged={() => setMemoryRefreshNonce((n) => n + 1)}
             onNewChat={handleNewChat}
           />
         )
@@ -500,6 +502,7 @@ function MainApp({ auth, onAuth, onLogout }) {
             userId={userId}
             username={auth?.username}
             sessionId={activeSessionId}
+            refreshNonce={memoryRefreshNonce}
           />
         )
         break

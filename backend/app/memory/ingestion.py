@@ -159,18 +159,34 @@ async def extract_and_store_memories(
         {"role": "user", "content": conversation_text},
     ]
 
-    response = await call_qwen_with_functions(
-        messages, EXTRACT_MEMORIES_TOOL, model=QWEN_MODEL
-    )
+    try:
+        response = await call_qwen_with_functions(
+            messages, EXTRACT_MEMORIES_TOOL, model=QWEN_MODEL
+        )
+    except Exception:
+        logger.exception(
+            "Qwen memory extraction failed for message_id=%s user_id=%s",
+            message_id,
+            user_id,
+        )
+        return []
 
     arguments = _extract_tool_arguments(response)
     if not arguments:
-        logger.info("No memories extracted for message_id=%s", message_id)
+        logger.warning(
+            "No tool-call arguments from Qwen for message_id=%s user_id=%s",
+            message_id,
+            user_id,
+        )
         return []
 
     memory_items = arguments.get("memories") or []
     if not memory_items:
-        logger.info("Empty memories array for message_id=%s", message_id)
+        logger.warning(
+            "Empty memories array from Qwen for message_id=%s user_id=%s",
+            message_id,
+            user_id,
+        )
         return []
 
     created: list[Memory] = []

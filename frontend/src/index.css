@@ -29,6 +29,23 @@
   box-sizing: border-box;
 }
 
+.hide-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.hide-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+a {
+  color: #8ab4f8;
+}
+
+a:hover {
+  color: #aecbfa;
+}
+
 html,
 body,
 #root {
@@ -289,11 +306,12 @@ select {
   font-size: 14px;
   font-weight: 500;
   transition: background 0.15s ease, color 0.15s ease;
+  text-decoration: none;
 }
 
 .sidebar-nav-link:hover {
   background: rgba(255, 255, 255, 0.04);
-  color: var(--text-primary);
+  color: #aecbfa;
 }
 
 .sidebar-nav-link.active {
@@ -337,7 +355,8 @@ select {
   display: flex;
   flex-direction: column;
   gap: 2px;
-  overflow: hidden;
+  overflow-y: auto;
+  overflow-x: hidden;
   min-height: 0;
 }
 
@@ -1056,12 +1075,14 @@ select {
 }
 
 .bubble.user {
-  background: var(--user-bubble);
-  color: #0b0e1a;
+  background: rgba(59, 130, 246, 0.15);
+  border: 1px solid rgba(59, 130, 246, 0.3);
+  color: #ffffff;
   padding: 12px 16px;
   border-radius: 18px;
   border-bottom-right-radius: 6px;
   white-space: pre-wrap;
+  box-shadow: 0 2px 8px rgba(59, 130, 246, 0.12);
 }
 
 .bubble.assistant {
@@ -1114,15 +1135,16 @@ select {
 }
 
 .user-row .copy-msg-btn {
-  color: #1a2340;
-  background: rgba(255, 255, 255, 0.35);
-  border-color: rgba(255, 255, 255, 0.45);
+  color: rgba(255, 255, 255, 0.85);
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.2);
 }
 
 .user-row .copy-msg-btn:hover,
 .user-row .copy-msg-btn.copied {
-  color: #0b0e1a;
-  background: rgba(255, 255, 255, 0.55);
+  color: #ffffff;
+  background: rgba(255, 255, 255, 0.16);
+  border-color: rgba(255, 255, 255, 0.35);
 }
 
 .copy-msg-btn.copied {
@@ -1190,6 +1212,16 @@ select {
   color: inherit;
   font-size: 15px;
   line-height: 1.6;
+}
+
+.markdown-content a {
+  color: #8ab4f8;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.markdown-content a:hover {
+  color: #aecbfa;
 }
 
 .markdown-content > :first-child { margin-top: 0; }
@@ -1781,7 +1813,8 @@ select {
 .memory-table-wrap {
   flex: 1;
   min-height: 0;
-  overflow: hidden;
+  overflow-y: auto;
+  overflow-x: hidden;
 }
 
 .stats-title,
@@ -2178,7 +2211,8 @@ select {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
   gap: 12px;
-  overflow: hidden;
+  overflow-y: auto;
+  overflow-x: hidden;
   flex: 1;
   min-height: 0;
   align-content: start;

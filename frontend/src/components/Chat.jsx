@@ -6,6 +6,7 @@ import rehypeKatex from 'rehype-katex'
 import 'katex/dist/katex.min.css'
 import ModelDropdown from './ModelDropdown.jsx'
 import MemoriaLogo from './MemoriaLogo.jsx'
+import { DEMO_TOKEN } from '../App.jsx'
 import { APP_TAGLINE_SUFFIX } from '../constants/branding.js'
 import {
   IconCheck,
@@ -32,28 +33,83 @@ const SLASH_COMMANDS = [
   {
     prefix: '/imagine',
     type: 'image',
+    kind: 'media',
     endpoint: '/api/generate/image',
     color: '#22c55e',
-    hint: 'Image generation',
+    hint: 'Generate an image',
     modelLabel: 'Image Generation (wan2.1-t2i-plus)',
   },
   {
     prefix: '/gen_video',
     type: 'video',
+    kind: 'media',
     endpoint: '/api/generate/video',
     color: '#3b82f6',
-    hint: 'Video generation',
+    hint: 'Generate a video',
     modelLabel: 'Video Generation (wan2.1-t2v-turbo)',
   },
   {
     prefix: '/gen_voice',
     type: 'voice',
+    kind: 'media',
     endpoint: '/api/generate/voice',
     color: '#a855f7',
     hint: 'Voice overview',
     modelLabel: 'Voice Generation (qwen3-tts-flash)',
   },
+  {
+    prefix: '/memorize',
+    kind: 'memorize',
+    color: '#f59e0b',
+    hint: 'Store a fact manually',
+  },
+  {
+    prefix: '/create_task',
+    kind: 'task-create',
+    color: '#14b8a6',
+    hint: 'Create a task',
+  },
+  {
+    prefix: '/show_tasks',
+    kind: 'task-show',
+    color: '#06b6d4',
+    hint: 'Show your tasks',
+  },
+  {
+    prefix: '/list_memory',
+    kind: 'memory-list',
+    color: '#d97706',
+    hint: 'List session memories',
+  },
+  {
+    prefix: '/forget_memory',
+    kind: 'memory-forget',
+    color: '#fbbf24',
+    hint: 'Forget by ID or ALL',
+  },
 ]
+
+const MEDIA_COMMANDS = SLASH_COMMANDS.filter((cmd) => cmd.kind === 'media')
+
+function parseMemorize(text) {
+  const trimmed = text.trim()
+  if (!trimmed.startsWith('/memorize')) return null
+  const content = trimmed.slice('/memorize'.length).trim()
+  if (!content) return null
+  return content
+}
+
+function isListMemoryCommand(text) {
+  return text.trim() === '/list_memory'
+}
+
+function parseForgetMemory(text) {
+  const trimmed = text.trim()
+  if (!trimmed.startsWith('/forget_memory')) return null
+  const arg = trimmed.slice('/forget_memory'.length).trim()
+  if (!arg) return null
+  return arg
+}
 
 function parseCreateTask(text) {
   const trimmed = text.trim()
@@ -69,7 +125,7 @@ function isShowTasksCommand(text) {
 
 function parseMediaCommand(text) {
   const trimmed = text.trim()
-  for (const command of SLASH_COMMANDS) {
+  for (const command of MEDIA_COMMANDS) {
     if (trimmed.startsWith(command.prefix)) {
       const prompt = trimmed.slice(command.prefix.length).trim()
       if (!prompt) return null
@@ -287,6 +343,7 @@ export default function Chat({
   onGlobalMemoryToggle,
   onPendingChatEmptyChange,
   onNewChat,
+  onMemoriesChanged,
 }) {
   const [messages, setMessages] = useState([])
   const [input, setInput] = useState('')
@@ -304,15 +361,16 @@ export default function Chat({
   const textareaRef = useRef(null)
   const stickToBottomRef = useRef(true)
   const lastInjectNonce = useRef(null)
+  const sessionMemoryIndexRef = useRef(new Map())
 
   const slashMenuItems = useMemo(() => getSlashMenuItems(input), [input])
   const activeSlashCommand = useMemo(() => detectActiveSlashCommand(input), [input])
   const inputHighlight = useMemo(() => getInputHighlight(input), [input])
   const mediaModelOverride = useMemo(() => {
     if (mediaGenType) {
-      return SLASH_COMMANDS.find((c) => c.type === mediaGenType) || null
+      return MEDIA_COMMANDS.find((c) => c.type === mediaGenType) || null
     }
-    return activeSlashCommand
+    return activeSlashCommand?.kind === 'media' ? activeSlashCommand : null
   }, [mediaGenType, activeSlashCommand])
 
   const showMemorylessToggle = isPendingSession && messages.length === 0 && !sending
@@ -756,6 +814,164 @@ export default function Chat({
     ])
   }
 
+  async function fetchSessionMemoriesSorted() {
+    const params = new URLSearchParams({ user_id: userId })
+    if (sessionId) params.set('session_id', sessionId)
+    const res = await fetch(`/api/memories?${params}`)
+    if (!res.ok) throw new Error(`Failed to load memories (${res.status})`)
+    const data = await res.json()
+    return [...data].sort(
+      (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime(),
+    )
+  }
+
+  function rebuildSessionMemoryIndex(memories) {
+    const index = new Map()
+    memories.forEach((memory, i) => {
+      index.set(String(i + 1).padStart(2, '0'), memory.id)
+    })
+    sessionMemoryIndexRef.current = index
+    return index
+  }
+
+  async function sendMemorize(content) {
+    const res = await fetch('/api/memorize', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ user_id: userId, content }),
+    })
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}))
+      throw new Error(data.detail || `Failed to memorize (${res.status})`)
+    }
+    onMemoriesChanged?.()
+    setMessages((current) => [
+      ...current,
+      {
+        role: 'assistant',
+        content: `✅ Memory saved: "${content}"`,
+        kind: 'text',
+        memory_ids: [],
+        feedback: null,
+      },
+    ])
+  }
+
+  async function sendListMemory() {
+    const memories = await fetchSessionMemoriesSorted()
+    rebuildSessionMemoryIndex(memories)
+
+    let content
+    if (!memories.length) {
+      content =
+        'No memories stored for this chat yet.\n\nUse `/memorize <fact>` to add one manually, or chat normally to extract memories automatically.'
+    } else {
+      const lines = memories.map((memory, i) => {
+        const seq = String(i + 1).padStart(2, '0')
+        return `${seq}. [${memory.type}] "${memory.content}"`
+      })
+      content = `${lines.join('\n')}\n\nUse \`/forget_memory 01\` to remove a specific memory, or \`/forget_memory ALL\` to clear all.`
+    }
+
+    setMessages((current) => [
+      ...current,
+      {
+        role: 'assistant',
+        content,
+        kind: 'text',
+        memory_ids: [],
+        feedback: null,
+      },
+    ])
+  }
+
+  async function deleteMemoryById(memoryId) {
+    const res = await fetch(
+      `/api/memories/${encodeURIComponent(memoryId)}?user_id=${encodeURIComponent(userId)}`,
+      { method: 'DELETE', headers: { 'X-API-Token': DEMO_TOKEN } },
+    )
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}))
+      throw new Error(data.detail || `Delete failed (${res.status})`)
+    }
+  }
+
+  async function sendForgetMemory(arg) {
+    const memories = await fetchSessionMemoriesSorted()
+    const index = rebuildSessionMemoryIndex(memories)
+
+    if (arg.toUpperCase() === 'ALL') {
+      if (!memories.length) {
+        setMessages((current) => [
+          ...current,
+          {
+            role: 'assistant',
+            content: 'No memories in this chat to forget.',
+            kind: 'text',
+            memory_ids: [],
+            feedback: null,
+          },
+        ])
+        return
+      }
+
+      await Promise.all(memories.map((memory) => deleteMemoryById(memory.id)))
+      sessionMemoryIndexRef.current = new Map()
+      onMemoriesChanged?.()
+      setMessages((current) => [
+        ...current,
+        {
+          role: 'assistant',
+          content: 'All memories in this chat have been forgotten.',
+          kind: 'text',
+          memory_ids: [],
+          feedback: null,
+        },
+      ])
+      return
+    }
+
+    const seq = arg.padStart(2, '0')
+    const memoryId = index.get(seq)
+    if (!memoryId) {
+      setMessages((current) => [
+        ...current,
+        {
+          role: 'assistant',
+          content: 'Invalid memory ID. Use `/list_memory` to see current IDs.',
+          kind: 'text',
+          memory_ids: [],
+          feedback: null,
+        },
+      ])
+      return
+    }
+
+    await deleteMemoryById(memoryId)
+    onMemoriesChanged?.()
+    setMessages((current) => [
+      ...current,
+      {
+        role: 'assistant',
+        content: `Memory #${seq} deleted.`,
+        kind: 'text',
+        memory_ids: [],
+        feedback: null,
+      },
+    ])
+  }
+
+  async function runLocalCommand(handler) {
+    setSending(true)
+    try {
+      await handler()
+    } catch (e) {
+      setError(e.message || 'Command failed')
+    } finally {
+      setSending(false)
+    }
+  }
+
   async function send() {
     const text = input.trim()
     if (!text || sending || !sessionId) return
@@ -769,27 +985,33 @@ export default function Chat({
     const createTaskTitle = parseCreateTask(text)
     if (createTaskTitle) {
       setMessages((m) => [...m, { role: 'user', content: text, kind: 'text' }])
-      setSending(true)
-      try {
-        await sendCreateTask(createTaskTitle)
-      } catch (e) {
-        setError(e.message || 'Failed to create task')
-      } finally {
-        setSending(false)
-      }
+      await runLocalCommand(() => sendCreateTask(createTaskTitle))
       return
     }
 
     if (isShowTasksCommand(text)) {
       setMessages((m) => [...m, { role: 'user', content: text, kind: 'text' }])
-      setSending(true)
-      try {
-        await sendShowTasks()
-      } catch (e) {
-        setError(e.message || 'Failed to load tasks')
-      } finally {
-        setSending(false)
-      }
+      await runLocalCommand(sendShowTasks)
+      return
+    }
+
+    const memorizeContent = parseMemorize(text)
+    if (memorizeContent) {
+      setMessages((m) => [...m, { role: 'user', content: text, kind: 'text' }])
+      await runLocalCommand(() => sendMemorize(memorizeContent))
+      return
+    }
+
+    if (isListMemoryCommand(text)) {
+      setMessages((m) => [...m, { role: 'user', content: text, kind: 'text' }])
+      await runLocalCommand(sendListMemory)
+      return
+    }
+
+    const forgetArg = parseForgetMemory(text)
+    if (forgetArg) {
+      setMessages((m) => [...m, { role: 'user', content: text, kind: 'text' }])
+      await runLocalCommand(() => sendForgetMemory(forgetArg))
       return
     }
 
@@ -1088,24 +1310,32 @@ export default function Chat({
         </div>
 
         <div className="action-chips">
-          {SLASH_COMMANDS.map((cmd) => (
-            <button
-              key={cmd.prefix}
-              type="button"
-              className={`action-chip${isMemoryless ? ' disabled' : ''}`}
-              style={{ '--chip-color': cmd.color }}
-              onClick={() => {
-                if (isMemoryless) {
-                  setError('Media generation is disabled in MemoryLess sessions.')
-                  return
-                }
-                insertSlashCommand(cmd)
-              }}
-              disabled={isMemoryless}
-            >
-              {cmd.prefix}
-            </button>
-          ))}
+          {SLASH_COMMANDS.map((cmd) => {
+            const isMedia = cmd.kind === 'media'
+            const disabled = isMedia && isMemoryless
+            return (
+              <button
+                key={cmd.prefix}
+                type="button"
+                className={`action-chip${disabled ? ' disabled' : ''}`}
+                style={{ '--chip-color': cmd.color }}
+                onClick={() => {
+                  if (disabled) {
+                    setError('Media generation is disabled in MemoryLess sessions.')
+                    return
+                  }
+                  if (cmd.kind === 'task-show' || cmd.kind === 'memory-list') {
+                    setInput(cmd.prefix)
+                  } else {
+                    insertSlashCommand(cmd)
+                  }
+                }}
+                disabled={disabled}
+              >
+                {cmd.prefix}
+              </button>
+            )
+          })}
         </div>
 
         {error && <div className="error">{error}</div>}

@@ -193,7 +193,7 @@ export default function Sidebar({
           <div className="sidebar-section-toggle" style={{ cursor: 'default' }}>
             Recent Chats
           </div>
-          <div className="sidebar-chat-list">
+          <div className="sidebar-chat-list hide-scrollbar">
             {loading && (
               <div className="sidebar-empty">
                 <span className="spinner spinner-inline" aria-hidden="true" /> Loading…

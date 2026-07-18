@@ -12,9 +12,14 @@ MAX_TITLE_LENGTH = 80
 
 SLASH_HELP_REPLY = (
     "Available commands:\n\n"
-    "/imagine <prompt> – Generate an image\n"
-    "/gen_video <prompt> – Generate a video\n"
-    "/gen_voice <prompt> – Create a voice overview of the conversation"
+    "/imagine <prompt> – Generate an image (AI)\n"
+    "/gen_video <prompt> – Generate a video (AI)\n"
+    "/gen_voice <prompt> – Create a voice overview (AI)\n"
+    "/memorize <fact> – Store a fact manually (no AI)\n"
+    "/create_task <title> – Create a task (no AI)\n"
+    "/show_tasks – List your tasks (no AI)\n"
+    "/list_memory – List memories from this chat (no AI)\n"
+    "/forget_memory <ID|ALL> – Delete a memory or clear this chat (no AI)"
 )
 
 _MEDIA_PREFIXES: tuple[tuple[str, str], ...] = (

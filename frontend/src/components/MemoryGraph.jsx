@@ -47,7 +47,12 @@ function TypeBarChart({ types }) {
   )
 }
 
-export default function MemoryGraph({ userId, username = null, sessionId = null }) {
+export default function MemoryGraph({
+  userId,
+  username = null,
+  sessionId = null,
+  refreshNonce = 0,
+}) {
   const [memories, setMemories] = useState([])
   const [stats, setStats] = useState(EMPTY_STATS)
   const [loading, setLoading] = useState(false)
@@ -84,7 +89,7 @@ export default function MemoryGraph({ userId, username = null, sessionId = null 
 
   useEffect(() => {
     load()
-  }, [load])
+  }, [load, refreshNonce])
 
   async function forget(id) {
     setError('')
@@ -150,7 +155,7 @@ export default function MemoryGraph({ userId, username = null, sessionId = null 
           </div>
         </div>
 
-        <div className="memory-table-wrap">
+        <div className="memory-table-wrap hide-scrollbar">
           <table>
             <thead>
               <tr>

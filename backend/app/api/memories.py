@@ -129,15 +129,28 @@ async def memory_stats(
 @router.get("/memories", response_model=list[MemoryOut])
 async def list_memories(
     user_id: str = Query(..., min_length=1),
+    session_id: str | None = Query(None, min_length=1),
     db: AsyncSession = Depends(get_db),
 ) -> list[MemoryOut]:
-    """Return a user's active (non-archived) memories, newest first."""
+    """Return a user's active (non-archived) memories.
 
-    stmt = (
-        select(Memory)
-        .where(Memory.user_id == user_id, Memory.archived.is_(False))
-        .order_by(Memory.created_at.desc())
-    )
+    When ``session_id`` is provided, only memories for that session are returned,
+    ordered oldest-first for stable chat command numbering.
+  """
+
+    filters = [Memory.user_id == user_id, Memory.archived.is_(False)]
+
+    if session_id is not None:
+        try:
+            session_uuid = uuid.UUID(session_id)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid session id")
+        filters.append(Memory.session_id == session_uuid)
+        order_by = Memory.created_at.asc()
+    else:
+        order_by = Memory.created_at.desc()
+
+    stmt = select(Memory).where(*filters).order_by(order_by)
     rows = (await db.execute(stmt)).scalars().all()
     return [
         MemoryOut(

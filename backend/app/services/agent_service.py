@@ -351,10 +351,18 @@ async def _finalize_chat_turn(
                 user_id=user_id,
                 message_id=message_id,
                 session_id=session_id,
-                is_memoryless=is_memoryless,
+                is_memoryless=False,
             )
         except Exception:  # noqa: BLE001 - enqueue failure must not break the reply
-            logger.exception("Failed to enqueue extract_memories_task")
+            logger.exception(
+                "Failed to enqueue extract_memories_task for session_id=%s",
+                session_id,
+            )
+    else:
+        logger.info(
+            "Skipping memory extraction enqueue for memoryless session_id=%s",
+            session_id,
+        )
 
     user_msg_count = await redis_client.incr(f"{session_key}:user_msg_count")
     await redis_client.expire(f"{session_key}:user_msg_count", SESSION_TTL_SECONDS)
