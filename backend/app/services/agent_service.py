@@ -28,6 +28,7 @@ from app.memory.models import Memory
 from app.models.chat_message import ChatMessage
 from app.models.user import User
 from app.api.sessions import ensure_session_exists, touch_session_on_message
+from app.services.memoria_knowledge import MEMORIA_KNOWLEDGE_BASE
 from app.services.session_titles import SLASH_HELP_REPLY
 from app.memory.reflection import generate_user_reflection, get_latest_reflection
 from app.memory.retrieval import retrieve_context_and_ids
@@ -300,6 +301,11 @@ async def _prepare_chat_turn(
     system_prompt += f"\n\n{format_persona_prompt(user_persona)}"
     system_prompt += f"\n\n{MEMORIA_CAPABILITIES}"
     system_prompt += f"\n\n{MEMORIA_IDENTITY}"
+    system_prompt += (
+        "\n\n---\nWhen users ask how Memoria works, its architecture, features, "
+        "structure, or implementation, use this knowledge base:\n\n"
+        f"{MEMORIA_KNOWLEDGE_BASE}"
+    )
     if session_summary:
         system_prompt = (
             f"Summary of the conversation so far: {session_summary}\n\n"
