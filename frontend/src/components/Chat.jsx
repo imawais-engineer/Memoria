@@ -106,6 +106,16 @@ const SLASH_COMMANDS = [
 
 const MEDIA_COMMANDS = SLASH_COMMANDS.filter((cmd) => cmd.kind === 'media')
 
+function extractApiErrorDetail(data) {
+  if (!data) return ''
+  const detail = data.detail
+  if (typeof detail === 'string') return detail
+  if (Array.isArray(detail)) {
+    return detail.map((item) => item.msg || item.message || String(item)).join(', ')
+  }
+  return ''
+}
+
 function parseMemorize(text) {
   const trimmed = text.trim()
   if (!trimmed.startsWith('/memorize')) return null
@@ -304,7 +314,13 @@ function MessageBody({ message }) {
   if (message.kind === 'video' && message.mediaUrl) {
     return (
       <div className="chat-media-block">
-        <video src={message.mediaUrl} controls className="chat-media" />
+        <video
+          src={message.mediaUrl}
+          controls
+          playsInline
+          preload="metadata"
+          className="chat-media chat-media--video"
+        />
       </div>
     )
   }
@@ -386,6 +402,7 @@ export default function Chat({
   const lastInjectNonce = useRef(null)
   const sessionMemoryIndexRef = useRef(new Map())
   const pendingTaskIndexRef = useRef(new Map())
+  const skipNextHistoryLoadRef = useRef(false)
 
   const piScopeNote = globalMemoryEnabled
     ? 'Personal Intelligence is active – showing all memories.'
@@ -480,6 +497,11 @@ export default function Chat({
       stickToBottomRef.current = true
       setShowScrollDown(false)
       return
+    }
+
+    if (skipNextHistoryLoadRef.current) {
+      skipNextHistoryLoadRef.current = false
+      return undefined
     }
 
     let cancelled = false
@@ -599,12 +621,15 @@ export default function Chat({
     }
   }
 
-  function applySessionResponse(data) {
+  function applySessionResponse(data, { preserveLocalMedia = false } = {}) {
     const resolvedId = data.session_id || sessionId
     if (data.title && resolvedId) {
       onSessionTitleUpdate?.(resolvedId, data.title)
     }
     if (isPendingSession && resolvedId) {
+      if (preserveLocalMedia) {
+        skipNextHistoryLoadRef.current = true
+      }
       onSessionCreated?.(resolvedId, { isMemoryless, title: data.title })
     }
   }
@@ -638,11 +663,14 @@ export default function Chat({
 
         if (!res.ok) {
           const data = await res.json().catch(() => ({}))
-          throw new Error(data.detail || `Voice generation failed (${res.status})`)
+          if (res.status === 429) {
+            throw new Error(extractApiErrorDetail(data) || 'Voice generation limit reached.')
+          }
+          throw new Error(extractApiErrorDetail(data) || `Voice generation failed (${res.status})`)
         }
 
         const data = await res.json()
-        applySessionResponse(data)
+        applySessionResponse(data, { preserveLocalMedia: true })
         setMessages((current) => {
           const withoutStatus = current.filter((item) => item.kind !== 'voice-status')
           return [
@@ -675,29 +703,28 @@ export default function Chat({
         }),
       })
 
+      const data = await res.json().catch(() => ({}))
+
       if (res.status === 429) {
         setError(
-          type === 'image'
-            ? 'Image generation limit reached (5 max).'
-            : 'Video generation limit reached (2 max).',
+          extractApiErrorDetail(data) || 'Generation limit reached.',
         )
         return
       }
 
       if (!res.ok) {
-        const data = await res.json().catch(() => ({}))
-        throw new Error(data.detail || `Generation failed (${res.status})`)
+        throw new Error(extractApiErrorDetail(data) || `Generation failed (${res.status})`)
       }
 
-      const data = await res.json()
-      applySessionResponse(data)
+      const mediaUrl = data.url || data.video_url
+      applySessionResponse(data, { preserveLocalMedia: true })
       setMessages((current) => [
         ...current,
         {
           role: 'assistant',
           content: '',
           kind: type,
-          mediaUrl: data.url,
+          mediaUrl,
           prompt,
         },
       ])
@@ -718,7 +745,10 @@ export default function Chat({
         model: selectedModel,
       }),
     })
-    if (!res.ok) throw new Error(`Backend returned ${res.status}`)
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}))
+      throw new Error(extractApiErrorDetail(data) || `Backend returned ${res.status}`)
+    }
 
     setMessages((m) => [
       ...m,

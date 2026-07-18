@@ -13,7 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import get_db
 from app.core.redis_client import get_redis
 from app.services.agent_service import handle_message, handle_message_stream
-from app.services.usage import check_and_increment_usage
+from app.services.usage import USAGE_LIMIT_MESSAGE, check_and_increment_usage
 
 router = APIRouter()
 
@@ -40,7 +40,7 @@ async def _enforce_message_limit(db: AsyncSession, user_id: str) -> None:
     if not allowed:
         raise HTTPException(
             status_code=429,
-            detail="Message limit reached (10 max).",
+            detail=USAGE_LIMIT_MESSAGE,
         )
 
 

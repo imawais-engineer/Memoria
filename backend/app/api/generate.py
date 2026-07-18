@@ -21,7 +21,11 @@ from app.core.dashscope_client import (
 from app.core.database import get_db
 from app.core.redis_client import get_redis
 from app.models.generated_asset import GeneratedAsset
-from app.services.usage import check_and_increment_usage, get_usage_summary
+from app.services.usage import (
+    USAGE_LIMIT_MESSAGE,
+    check_and_increment_usage,
+    get_usage_summary,
+)
 from app.services.voice_generation import generate_voice_overview
 
 logger = logging.getLogger(__name__)
@@ -136,7 +140,7 @@ async def create_image(
 ) -> GenerateUrlResponse:
     allowed = await check_and_increment_usage(db, body.user_id, "image")
     if not allowed:
-        raise HTTPException(status_code=429, detail="Image generation limit reached")
+        raise HTTPException(status_code=429, detail=USAGE_LIMIT_MESSAGE)
 
     session_title = await _bind_media_session(
         db,
@@ -171,7 +175,7 @@ async def create_video(
 ) -> GenerateUrlResponse:
     allowed = await check_and_increment_usage(db, body.user_id, "video")
     if not allowed:
-        raise HTTPException(status_code=429, detail="Video generation limit reached")
+        raise HTTPException(status_code=429, detail=USAGE_LIMIT_MESSAGE)
 
     session_title = await _bind_media_session(
         db,
@@ -209,7 +213,7 @@ async def create_voice(
 
     allowed = await check_and_increment_usage(db, body.user_id, "audio")
     if not allowed:
-        raise HTTPException(status_code=429, detail="Audio generation limit reached")
+        raise HTTPException(status_code=429, detail=USAGE_LIMIT_MESSAGE)
 
     session_title = await _bind_media_session(
         db,
@@ -228,6 +232,15 @@ async def create_voice(
     except Exception as exc:  # noqa: BLE001
         logger.exception("Voice generation failed for user_id=%s", body.user_id)
         raise HTTPException(status_code=500, detail="Voice generation failed") from exc
+
+    asset = GeneratedAsset(
+        user_id=UUID(body.user_id),
+        type="audio",
+        prompt=body.prompt,
+        url=result["audio_data_uri"],
+    )
+    db.add(asset)
+    await db.commit()
 
     return GenerateVoiceResponse(**result, title=session_title)
 

@@ -168,6 +168,15 @@ export default function MediaPage({ userId }) {
                 <div className="media-card-thumb">
                   {asset.type === 'image' && asset.url ? (
                     <img src={asset.url} alt="" />
+                  ) : (asset.type === 'voice' || asset.type === 'audio') && asset.url ? (
+                    <audio
+                      src={asset.url}
+                      controls
+                      className="media-card-audio"
+                      onClick={(e) => e.stopPropagation()}
+                    />
+                  ) : asset.type === 'video' && asset.url ? (
+                    <video src={asset.url} muted playsInline className="media-card-video" />
                   ) : (
                     <span className="media-card-icon">
                       <MediaTypeIcon type={asset.type} />

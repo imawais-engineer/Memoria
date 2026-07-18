@@ -76,6 +76,19 @@ docker compose run --rm backend alembic upgrade head   # apply DB migrations
 # backend now on http://localhost:8000  (health: /health, docs: /docs)
 ```
 
+> **⚠️ Data persistence — read this before updating**
+>
+> PostgreSQL data is stored in the named Docker volume `pgdata`. **Never use
+> `docker compose down -v`** — the `-v` flag deletes volumes and will erase all
+> memories, chats, and media.
+>
+> To update safely, keep your data and restart:
+>
+> ```bash
+> docker compose down && docker compose up -d --build
+> docker compose run --rm backend alembic upgrade head
+> ```
+
 Then start the dashboard:
 
 ```bash
@@ -83,6 +96,25 @@ cd frontend && npm install && npm run dev   # http://localhost:5173
 ```
 
 Open **http://localhost:5173** — you'll see the Memoria **landing page** at `/`. Click **Get Started** to open `/auth`, then sign up or log in (username + favorite book). After login you're taken to `/app` with a **fresh blank chat**; past sessions appear under **Recent Chats** in the sidebar.
+
+### 2c. Alibaba Cloud ECS (production)
+
+Terraform in [`infrastructure/acs_deployment.tf`](infrastructure/acs_deployment.tf) provisions ECS,
+ApsaraDB PostgreSQL (pgvector), and ApsaraDB Redis. The ECS host runs the backend
+via Docker Compose; **database state lives in ApsaraDB**, not on the container
+filesystem.
+
+When updating the app on ECS:
+
+```bash
+docker compose down && docker compose up -d --build
+docker compose run --rm backend alembic upgrade head
+```
+
+**Never use `docker compose down -v` on any environment** — on local Compose it
+deletes the `pgdata` volume (all memories, chats, and media). On ECS, avoid any
+workflow that recreates managed databases from scratch unless you intend a full
+reset.
 
 **Dashboard views:** Chat · Memories · Persona · Tasks · Media · Settings · Help · Feedback · About (via profile menu).
 

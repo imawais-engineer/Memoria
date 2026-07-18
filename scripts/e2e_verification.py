@@ -251,23 +251,23 @@ async def run() -> int:
 
         # g) Video limit
         _sync_sql(
-            "UPDATE users SET video_count = 0, max_videos = 2 WHERE id = :id",
+            "UPDATE users SET video_count = 0, max_videos = 5 WHERE id = :id",
             {"id": user_id},
         )
         if DASHSCOPE_KEY:
-            for i in range(2):
+            for i in range(5):
                 await client.post(
                     "/api/generate/video",
                     json={"user_id": user_id, "prompt": f"e2e video {i}"},
                 )
-            third = await client.post(
+            sixth_video = await client.post(
                 "/api/generate/video",
                 json={"user_id": user_id, "prompt": "one too many"},
             )
-            check("3rd video returns 429", third.status_code == 429, third.text)
+            check("6th video returns 429", sixth_video.status_code == 429, sixth_video.text)
         else:
             _sync_sql(
-                "UPDATE users SET video_count = 2, max_videos = 2 WHERE id = :id",
+                "UPDATE users SET video_count = 5, max_videos = 5 WHERE id = :id",
                 {"id": user_id},
             )
             blocked = await client.post(
@@ -283,12 +283,12 @@ async def run() -> int:
 
         # h) Audio / voice limit
         _sync_sql(
-            "UPDATE users SET audio_count = 0, max_audio = 2 WHERE id = :id",
+            "UPDATE users SET audio_count = 0, max_audio = 5 WHERE id = :id",
             {"id": user_id},
         )
         voice_session = str(uuid.uuid4())
         if DASHSCOPE_KEY:
-            for i in range(2):
+            for i in range(5):
                 await client.post(
                     "/api/generate/voice",
                     json={
@@ -297,7 +297,7 @@ async def run() -> int:
                         "prompt": f"overview {i}",
                     },
                 )
-            third_voice = await client.post(
+            sixth_voice = await client.post(
                 "/api/generate/voice",
                 json={
                     "user_id": user_id,
@@ -306,13 +306,13 @@ async def run() -> int:
                 },
             )
             check(
-                "3rd voice returns 429",
-                third_voice.status_code == 429,
-                third_voice.text,
+                "6th voice returns 429",
+                sixth_voice.status_code == 429,
+                sixth_voice.text,
             )
         else:
             _sync_sql(
-                "UPDATE users SET audio_count = 2, max_audio = 2 WHERE id = :id",
+                "UPDATE users SET audio_count = 5, max_audio = 5 WHERE id = :id",
                 {"id": user_id},
             )
             blocked = await client.post(
@@ -401,7 +401,7 @@ async def run() -> int:
 
         # Message limit spot-check
         _sync_sql(
-            "UPDATE users SET message_count = 10, max_messages = 10 WHERE id = :id",
+            "UPDATE users SET message_count = 20, max_messages = 20 WHERE id = :id",
             {"id": user_id},
         )
         blocked_msg = await client.post(

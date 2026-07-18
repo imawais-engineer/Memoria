@@ -178,8 +178,8 @@ async def test_video_limit_returns_429(client: AsyncClient, db_session_factory):
                 first_name="Test",
                 last_name="User",
                 favorite_book="Dune",
-                video_count=2,
-                max_videos=2,
+                video_count=5,
+                max_videos=5,
             )
         )
         await db.commit()
@@ -227,7 +227,7 @@ async def test_five_images_then_sixth_returns_429(client: AsyncClient, db_sessio
 
 
 @pytest.mark.asyncio
-async def test_two_videos_then_third_returns_429(client: AsyncClient, db_session_factory):
+async def test_five_videos_then_sixth_returns_429(client: AsyncClient, db_session_factory):
     user_id = uuid.uuid4()
     async with db_session_factory() as db:
         db.add(
@@ -246,18 +246,18 @@ async def test_two_videos_then_third_returns_429(client: AsyncClient, db_session
         "app.api.generate.generate_video",
         new=AsyncMock(return_value=fake_url),
     ):
-        for i in range(2):
+        for i in range(5):
             res = await client.post(
                 "/api/generate/video",
                 json={"user_id": str(user_id), "prompt": f"video {i}"},
             )
             assert res.status_code == 200, res.text
 
-        third = await client.post(
+        sixth = await client.post(
             "/api/generate/video",
             json={"user_id": str(user_id), "prompt": "one too many"},
         )
-    assert third.status_code == 429
+    assert sixth.status_code == 429
 
 
 @pytest.mark.asyncio
@@ -312,6 +312,14 @@ async def test_voice_generation_returns_overview_and_audio(
     assert payload["audio_data_uri"] == fake_audio
     assert payload["title"] == "Voice: create an overview of this discussion"
 
+    assets_res = await client.get("/api/generate/assets", params={"user_id": str(user_id)})
+    assert assets_res.status_code == 200
+    assets_payload = assets_res.json()
+    assert assets_payload["usage"]["audio_count"] == 1
+    assert len(assets_payload["assets"]) == 1
+    assert assets_payload["assets"][0]["type"] == "audio"
+    assert assets_payload["assets"][0]["url"] == fake_audio
+
 
 @pytest.mark.asyncio
 async def test_message_limit_returns_429(client: AsyncClient, db_session_factory):
@@ -324,8 +332,8 @@ async def test_message_limit_returns_429(client: AsyncClient, db_session_factory
                 first_name="Test",
                 last_name="User",
                 favorite_book="Dune",
-                message_count=10,
-                max_messages=10,
+                message_count=20,
+                max_messages=20,
             )
         )
         await db.commit()
@@ -353,8 +361,8 @@ async def test_audio_limit_returns_429(client: AsyncClient, db_session_factory):
                 first_name="Test",
                 last_name="User",
                 favorite_book="Dune",
-                audio_count=2,
-                max_audio=2,
+                audio_count=5,
+                max_audio=5,
             )
         )
         await db.commit()

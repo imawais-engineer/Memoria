@@ -205,3 +205,10 @@ safety, and coherence than memory-less baselines.
 Infrastructure-as-code for Alibaba Cloud lives in
 [`infrastructure/acs_deployment.tf`](../infrastructure/acs_deployment.tf); the
 backend container image is defined by [`backend/Dockerfile`](../backend/Dockerfile).
+
+**Persistent data on ECS / Docker Compose:** production and local Compose stacks
+use managed or named database storage (ApsaraDB RDS on ECS; the `pgdata` volume
+locally). When updating containers, use `docker compose down && docker compose
+up -d` **without** `-v`. **Never run `docker compose down -v`** — it deletes
+volumes and wipes all memories, chats, and generated media. After restart, run
+`alembic upgrade head` to apply migrations without losing data.

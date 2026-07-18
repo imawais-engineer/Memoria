@@ -113,7 +113,7 @@ Core memories never decay. Goal and preference use decay rate 0.01.
 ownership-checked, callable without the chat API.
 
 ### Usage quotas (per user, configurable on user record)
-Default limits: 10 chat messages, 5 images, 2 videos, 2 voice generations.
+Default limits: 20 chat messages, 5 images, 5 videos, 5 voice generations.
 HTTP 429 when exceeded. Media generation disabled in MemoryLess sessions.
 
 ### Authentication

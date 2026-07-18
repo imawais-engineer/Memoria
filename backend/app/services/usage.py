@@ -8,6 +8,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.user import User
 
+USAGE_LIMIT_MESSAGE = (
+    "You have hit the limit you cannot create more media. This is not a "
+    "commercial version. Built for Hackathon and is for test and judges use "
+    "only. Great for using / testing memoria."
+)
+
 
 async def check_and_increment_usage(
     db: AsyncSession,
