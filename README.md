@@ -78,9 +78,10 @@ docker compose run --rm backend alembic upgrade head   # apply DB migrations
 
 > **⚠️ Data persistence — read this before updating**
 >
-> PostgreSQL data is stored in the named Docker volume `pgdata`. **Never use
-> `docker compose down -v`** — the `-v` flag deletes volumes and will erase all
-> memories, chats, and media.
+> PostgreSQL data is stored in the named Docker volume `pgdata`. Redis chat
+> session history is stored on the `redisdata` volume (persisted across standard
+> restarts and upgrades). **Never use `docker compose down -v`** — the `-v`
+> flag deletes volumes and will erase all memories, chats, and media.
 >
 > To update safely, keep your data and restart:
 >
