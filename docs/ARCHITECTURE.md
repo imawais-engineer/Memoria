@@ -116,10 +116,10 @@ graph TD
 
 | # | Flow | Path |
 |---|------|------|
-| ① | **Chat with memory** | User message → FastAPI → `retrieve_context` (pgvector similarity) → Qwen-Plus with packed context → personalized response |
+| ① | **Chat with memory** | User message → `POST /chat` or `POST /chat/stream` (SSE) → `retrieve_context` → Qwen with packed context → personalized response |
 | ② | **Memory ingestion** | Chat turn → Celery ingestion worker → Qwen-Plus function calling (`extract_memories`) → `text-embedding-v3` → store in PostgreSQL |
 | ③ | **Daily decay** | Celery Beat (03:00 UTC) → `apply_decay` → exponential importance decay → soft-delete (`archived`) low-importance memories |
-| ④ | **Weekly consolidation** | Celery Beat (Sat 04:00 UTC) → `consolidate_memories` → cluster by cosine similarity (≥ 0.75) → Qwen-Max summary → link originals via `parent_id` / `is_consolidated` |
+| ④ | **Weekly consolidation** | Celery Beat (Sun 04:00 UTC) → `consolidate_memories` → cluster by cosine similarity (≥ 0.75) → Qwen-Max summary → link originals via `parent_id` / `is_consolidated` |
 | ⑤ | **MCP interoperability** | External agent → `GET /mcp/memory-skills` → invoke tool (`get_core_memories`, etc.) → ownership-checked DB query → JSON result |
 | ⑥ | **Context Archive** | Each non-MemoryLess reply → `chat_messages`; explicit recall via `GET /api/search-archive?query=...` (token-guarded) |
 
@@ -166,7 +166,7 @@ safety, and coherence than memory-less baselines.
 
 1. **Capture** — after each chat turn, the ingestion worker calls Qwen-Plus
    function calling to extract structured memories (`core`, `episodic`,
-   `semantic`, `procedural`).
+   `semantic`, `procedural`, `goal`, `preference`).
 2. **Embed** — each memory is vectorized with `text-embedding-v3` (1024 dims)
    and stored in the `memories` table alongside importance, decay rate, and
    metadata.
@@ -183,16 +183,21 @@ safety, and coherence than memory-less baselines.
 
 | Component | Role |
 |-----------|------|
-| `frontend/` | React/Vite dashboard — Chat (Markdown), Memory tab with stats cards + type chart |
-| `backend/app/main.py` | FastAPI entrypoint — `/health`, `/chat`, `/mcp/memory-skills` |
+| `frontend/` | React/Vite — public landing (`/`), auth (`/auth`), app dashboard (`/app`): Chat (SSE streaming, slash commands), Memories, Persona, Tasks, Media, Settings, Help, About |
+| `backend/app/main.py` | FastAPI entrypoint — `/health`, routers for chat, auth, memories, tasks, generate, sessions, MCP |
+| `backend/app/services/agent_service.py` | Chat orchestration, system prompt (memory context, persona, capabilities, product knowledge base) |
+| `backend/app/services/memoria_knowledge.py` | Static product/architecture knowledge injected into the agent system prompt |
 | `backend/app/mcp/memory_skill.py` | MCP tool implementations for external agents |
 | `backend/app/models/chat_message.py` | Context Archive ORM (`chat_messages` table) |
 | `backend/app/api/archive.py` | On-demand transcript search (`GET /api/search-archive`) |
+| `backend/app/api/generate.py` | Multimodal image/video/voice generation + asset library |
+| `backend/app/api/tasks.py` | Task CRUD for `/create_task` and Tasks page |
 | `backend/app/memory/retrieval.py` | Personal Memory retrieval with PI / MemoryLess scoping |
 | `backend/app/memory/reflection.py` | Structured user reflection synthesis (`traits` in metadata) |
 | `backend/app/memory/conflict_detection.py` | pgvector similarity + structured contradiction checks |
-| `backend/app/core/dashscope_client.py` | DashScope helpers incl. `call_qwen_structured()` |
-| `scripts/benchmark.py` | Quantitative with/without-memory benchmark (Module 3) |
+| `backend/app/core/dashscope_client.py` | DashScope helpers incl. `call_qwen_structured()` and streaming |
+| `Submission Files/architecture.html` | Judge-friendly standalone architecture diagram (hackathon submission) |
+| `scripts/benchmark.py` | Quantitative with/without-memory benchmark |
 | `infrastructure/acs_deployment.tf` | Alibaba Cloud IaC (ECS, ApsaraDB PostgreSQL, Redis) |
 
 ## Deployment

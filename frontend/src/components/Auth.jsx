@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import MemoriaLogo from './MemoriaLogo.jsx'
-import { APP_TAGLINE_SUFFIX } from '../constants/branding.js'
+import { APP_NAME_DISPLAY, APP_TAGLINE_SUFFIX } from '../constants/branding.js'
 
 export default function Auth({ onAuth, embedded = false }) {
   const [mode, setMode] = useState('login')
@@ -76,7 +76,14 @@ export default function Auth({ onAuth, embedded = false }) {
       <div className="auth-card">
         {!embedded && (
           <div className="auth-header">
-            <MemoriaLogo size="md" showName tagline={APP_TAGLINE_SUFFIX} layout="stacked" />
+            <MemoriaLogo
+              size="md"
+              showName
+              name={APP_NAME_DISPLAY}
+              matchIconSize
+              tagline={APP_TAGLINE_SUFFIX}
+              layout="stacked"
+            />
           </div>
         )}
 

@@ -2,17 +2,32 @@ import { useNavigate } from 'react-router-dom'
 import { useEffect, useRef } from 'react'
 import MemoriaLogo from './MemoriaLogo.jsx'
 import { FeatureIcon, StepIcon } from './Icons.jsx'
+import { APP_NAME_DISPLAY, APP_TAGLINE_SUFFIX } from '../constants/branding.js'
 import './Landing.css'
 
 const GITHUB_URL = 'https://github.com/imawais-engineer/Memoria'
 const DOCS_URL = 'https://github.com/imawais-engineer/Memoria/blob/main/docs/ARCHITECTURE.md'
-const ARCHITECTURE_URL = 'https://github.com/imawais-engineer/Memoria/blob/main/docs/ARCHITECTURE.md'
+const ARCHITECTURE_URL =
+  'https://github.com/imawais-engineer/Memoria/blob/main/Submission%20Files/architecture.html'
 
 const BENCHMARK = {
   without: 0.64,
   withMemory: 0.92,
   improvement: 78,
 }
+
+const HERO_STATS = [
+  { value: '+77.6%', label: 'Benchmark uplift' },
+  { value: '6', label: 'Memory types' },
+  { value: 'MCP', label: 'External agent skills' },
+]
+
+const PRODUCT_HIGHLIGHTS = [
+  { title: 'Streaming chat', desc: 'SSE token streaming with model switcher and Markdown + LaTeX replies.' },
+  { title: 'Slash commands', desc: '/imagine, /tasks_list, /list_memory, and more — type / for the full table.' },
+  { title: 'Tasks & media', desc: 'Create tasks in chat; browse, download, or delete generated assets.' },
+  { title: 'Personal Intelligence', desc: 'Toggle global memory access or run MemoryLess incognito sessions.' },
+]
 
 const FEATURES = [
   {
@@ -167,9 +182,16 @@ export default function Landing({ onGetStarted }) {
 
       <header className="landing-nav">
         <a href="#top" className="landing-nav-brand">
-          <MemoriaLogo size="sm" showName nameClassName="landing-nav-name" />
+          <MemoriaLogo
+            size="md"
+            showName
+            name={APP_NAME_DISPLAY}
+            matchIconSize
+            nameClassName="landing-nav-name"
+          />
         </a>
         <nav className="landing-nav-links" aria-label="Primary">
+          <a href="#product">Product</a>
           <a href="#features">Features</a>
           <a href="#how-it-works">How it Works</a>
           <a href="#benchmarks">Benchmarks</a>
@@ -184,12 +206,11 @@ export default function Landing({ onGetStarted }) {
           <div className="landing-hero-content">
             <p className="landing-eyebrow">Qwen Cloud Hackathon · Track 1 — MemoryAgent</p>
             <h1 className="landing-hero-title">
-              Meet Memoria – The AI That <span className="landing-gradient-text">Remembers You</span>
+              Meet <span className="landing-gradient-text">{APP_NAME_DISPLAY}</span> — The AI That{' '}
+              <span className="landing-gradient-text">Remembers You</span>
             </h1>
-            <p className="landing-hero-sub">
-              A self-evolving personal memory agent built on Qwen Cloud. Remembers what matters, forgets what
-              doesn&apos;t, and grows with you across every session.
-            </p>
+            <p className="landing-hero-sub">{APP_TAGLINE_SUFFIX}. Built on Qwen Cloud with hybrid pgvector
+              memory, autonomous forgetting, and a full React dashboard.</p>
             <div className="landing-hero-actions">
               <button type="button" className="landing-btn landing-btn--primary landing-btn--lg" onClick={goToAuth}>
                 Get Started
@@ -203,8 +224,34 @@ export default function Landing({ onGetStarted }) {
                 View on GitHub
               </a>
             </div>
+            <div className="landing-hero-stats">
+              {HERO_STATS.map((stat) => (
+                <div key={stat.label} className="landing-stat-pill">
+                  <strong>{stat.value}</strong>
+                  <span>{stat.label}</span>
+                </div>
+              ))}
+            </div>
           </div>
           <NeuralVisual />
+        </section>
+
+        <section id="product" className="landing-section landing-reveal">
+          <div className="landing-section-header">
+            <h2 className="landing-section-title">One Dashboard, Full Control</h2>
+            <p className="landing-section-lead">
+              Chat, memories, persona, tasks, and media — unified under a single dark theme with
+              high-contrast typography and accessible scroll surfaces.
+            </p>
+          </div>
+          <div className="landing-product-grid">
+            {PRODUCT_HIGHLIGHTS.map((item) => (
+              <article key={item.title} className="landing-glass-card landing-product-card">
+                <h3>{item.title}</h3>
+                <p>{item.desc}</p>
+              </article>
+            ))}
+          </div>
         </section>
 
         <section id="features" className="landing-section landing-reveal">
@@ -263,7 +310,7 @@ export default function Landing({ onGetStarted }) {
                 Accuracy
               </p>
               <p className="landing-benchmark-note">
-                Tested across 12 simulated user scenarios with Qwen3-Plus. Composite score combines accuracy,
+                Tested across 12 simulated user scenarios with qwen-plus. Composite score combines accuracy,
                 safety, and coherence.
               </p>
               <div className="landing-benchmark-mini">

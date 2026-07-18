@@ -3,8 +3,8 @@
   --panel: #171a2b;
   --panel-2: #1e2238;
   --border: #2a2f4a;
-  --text: #e7e9f3;
-  --muted: #9aa0b8;
+  --text: #f4f6fc;
+  --muted: #b4bdd6;
   --accent: #6c8cff;
   --accent-2: #48d597;
   --user-bubble: #6c8cff;
@@ -17,12 +17,20 @@
   --panel-overlay: var(--panel-2);
   --text-primary: var(--text);
   --text-secondary: var(--muted);
-  --text-muted: #6b7289;
+  --text-muted: #8b95b0;
   --accent-blue: var(--accent);
   --border-subtle: var(--border);
   --radius-button: 9999px;
   --radius-card: 12px;
   --radius-input: 9999px;
+
+  /* Unified marketing + app accents */
+  --accent-gradient: linear-gradient(135deg, #6c8cff 0%, #48d597 100%);
+  --surface-glass: rgba(18, 21, 40, 0.78);
+  --surface-glass-border: rgba(108, 140, 255, 0.28);
+  --glow-blue: rgba(108, 140, 255, 0.4);
+  --glow-green: rgba(72, 213, 151, 0.35);
+  --shadow-elevated: 0 16px 48px rgba(0, 0, 0, 0.45);
 }
 
 * {
@@ -1954,7 +1962,10 @@ select {
   display: grid;
   place-items: center;
   padding: 24px;
-  background: var(--canvas-bg);
+  background:
+    radial-gradient(ellipse 80% 50% at 20% -10%, rgba(108, 140, 255, 0.18), transparent 55%),
+    radial-gradient(ellipse 60% 40% at 90% 100%, rgba(72, 213, 151, 0.12), transparent 50%),
+    var(--canvas-bg);
 }
 
 .auth-wrapper {
@@ -1963,10 +1974,13 @@ select {
 }
 
 .auth-card {
-  background: var(--sidebar-bg);
-  border: 1px solid var(--border-subtle);
-  border-radius: 16px;
-  padding: 28px;
+  background: var(--surface-glass);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid var(--surface-glass-border);
+  border-radius: 20px;
+  padding: 32px 28px;
+  box-shadow: var(--shadow-elevated);
 }
 
 .auth-header {
@@ -2028,9 +2042,10 @@ select {
 }
 
 .tab.active {
-  color: #fff;
-  border-color: var(--accent-blue);
-  background: rgba(59, 130, 246, 0.15);
+  color: #0f1220;
+  border-color: transparent;
+  background: var(--accent-gradient);
+  font-weight: 600;
 }
 
 .auth-form {
@@ -2049,7 +2064,7 @@ select {
 }
 
 .auth-label input {
-  background: #111;
+  background: rgba(15, 18, 32, 0.65);
   border: 1px solid var(--border-subtle);
   color: var(--text-primary);
   padding: 11px 12px;
@@ -2065,6 +2080,16 @@ select {
 .auth-submit {
   width: 100%;
   margin-top: 4px;
+  background: var(--accent-gradient);
+  color: #0f1220;
+  font-weight: 700;
+  border: none;
+  box-shadow: 0 4px 20px var(--glow-blue);
+}
+
+.auth-submit:hover:not(:disabled) {
+  box-shadow: 0 8px 28px var(--glow-green);
+  opacity: 0.95;
 }
 
 .auth-error {

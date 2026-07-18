@@ -16,8 +16,14 @@
 
 ## Features
 
-- **Persistent memory** – facts extracted from conversations are embedded (`text-embedding-v3`, 1024-dim) and stored in PostgreSQL + pgvector.
+- **Persistent memory** – facts extracted from conversations are embedded (`text-embedding-v3`, 1024-dim) and stored in PostgreSQL + pgvector. Six memory types: `core`, `episodic`, `semantic`, `procedural`, `goal`, `preference`.
 - **Cross‑session recall** – retrieve what you told the agent in earlier, separate sessions via hybrid ranking (vector similarity × importance × recency).
+- **Personal Intelligence (PI)** – toggle global memory access across all chats, or limit recall to the current session + core facts when OFF.
+- **MemoryLess incognito sessions** – private chats that never read or write long-term memory; media slash commands disabled.
+- **Slash commands** – `/imagine`, `/gen_video`, `/gen_voice`, `/memorize`, `/create_task`, `/tasks_list`, `/task_complete`, `/list_memory`, `/forget_memory`; type `/` in chat for a formatted help table.
+- **SSE streaming chat** – token-by-token replies via `POST /chat/stream` with Markdown + KaTeX rendering.
+- **Tasks & media library** – create tasks in chat; browse generated images/videos with download and permanent delete.
+- **Product knowledge base** – the AI carries a built-in reference of Memoria's architecture, features, and behaviour (`backend/app/services/memoria_knowledge.py`).
 - **MCP skills** – expose memory tools (`get_core_memories`, `get_user_preferences`, `forget_memory`, `strengthen_memory`) at `GET /mcp/memory-skills` for external agents.
 - **Autonomous forgetting & consolidation** – daily exponential decay archives stale memories; weekly Qwen‑Max clustering consolidates related facts into concise summaries.
 - **Conflict detection** – new facts that contradict stored memories are flagged and superseded automatically during ingestion.
@@ -28,6 +34,7 @@
 - **Markdown + LaTeX chat rendering** – assistant replies render rich Markdown and KaTeX math (`$...$`, `$$...$$`) in the dashboard.
 - **Multimodal generation in chat** – use `/imagine`, `/gen_video`, and `/gen_voice` slash commands in chat for inline images (`wan2.1-t2i-plus`), videos (`wan2.1-t2v-turbo`), and voice overviews (Qwen summary + `qwen3-tts-flash`). All media uses DashScope default settings (no per-user size/duration controls). Per-user quotas (reset on upgrade): **10 chat messages**, **5 images**, **2 videos**, **2 voice generations**; exceeding a limit returns HTTP 429.
 - **Chat model switcher** – choose among `qwen-plus`, `qwen-max`, `qwq-plus`, and `qwen-turbo` per session via `GET /api/models` and the chat composer dropdown.
+- **Unified dark dashboard** – public landing page at `/`, auth at `/auth`, full app at `/app` with high-contrast typography and consistent blue→green accent gradient.
 - **Deployment on Azure + Alibaba Cloud Terraform proof** – live instance on Azure; full stack IaC for Alibaba Cloud in [`infrastructure/acs_deployment.tf`](infrastructure/acs_deployment.tf).
 
 ---
@@ -36,12 +43,14 @@
 
 Memoria is a modular FastAPI backend plus a React dashboard:
 
-- A chat turn hits **`POST /chat`**, which loads the short‑term **Redis** session, retrieves relevant long‑term memories from **PostgreSQL + pgvector**, and asks **Qwen (DashScope)** for a reply.
+- A chat turn hits **`POST /chat`** or **`POST /chat/stream`**, which loads the short‑term **Redis** session, retrieves relevant long‑term memories from **PostgreSQL + pgvector** (scoped by Personal Intelligence / MemoryLess), and asks **Qwen (DashScope)** for a reply.
 - New facts are extracted asynchronously by a **Celery** worker (Qwen function calling), embedded, and stored — with conflict detection and supersession.
-- Scheduled **Celery Beat** jobs handle **decay** (daily) and **consolidation** (weekly).
+- Scheduled **Celery Beat** jobs handle **decay** (daily 03:00 UTC) and **consolidation** (weekly Sun 04:00 UTC).
 - Reflection runs in the background every 10th user message; MCP tools let external agents query and curate memory.
 
 See the full component breakdown, sequence flows, and Mermaid diagram in **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)**.
+
+**Hackathon submission diagram:** open [`Submission Files/architecture.html`](Submission%20Files/architecture.html) in a browser for a judge-friendly layered architecture view.
 
 ---
 
@@ -73,7 +82,11 @@ Then start the dashboard:
 cd frontend && npm install && npm run dev   # http://localhost:5173
 ```
 
-Open **http://localhost:5173** — you'll see the Memoria public landing dashboard at `/`. Click **Get Started** (top-right) to open `/auth`, then sign up or log in (username + favorite book). After login you're taken to `/app` with a **fresh blank chat**; past sessions appear under **Recent Chats** in the sidebar. Use **New Chat** and the **Memoryless** toggle (below it on empty chats) for session modes. In chat, try `/imagine`, `/gen_video`, or `/gen_voice` for inline media; the composer also includes a **model switcher** (`qwen-plus`, `qwen-max`, `qwq-plus`, `qwen-turbo`).
+Open **http://localhost:5173** — you'll see the Memoria **landing page** at `/`. Click **Get Started** to open `/auth`, then sign up or log in (username + favorite book). After login you're taken to `/app` with a **fresh blank chat**; past sessions appear under **Recent Chats** in the sidebar.
+
+**Dashboard views:** Chat · Memories · Persona · Tasks · Media · Settings · Help · Feedback · About (via profile menu).
+
+Use **New Chat** and the **Memoryless** toggle (below it on empty chats) for session modes. In chat, try `/imagine`, `/gen_video`, or `/gen_voice` for inline media; type `/` for the command help table. The composer includes a **model switcher** (`qwen-plus`, `qwen-max`, `qwq-plus`, `qwen-turbo`) and a **Personal Intelligence** toggle.
 
 ### 2b. Run locally (without Docker)
 
@@ -158,7 +171,8 @@ The script signs up a test user, exercises chat/memory, Personal Intelligence to
 
 ```
 backend/          FastAPI app, memory subsystem, MCP skills, Celery, Alembic
-frontend/         React (Vite) dashboard — public landing page, auth, chat, memory, persona
+frontend/         React (Vite) — landing page, auth, chat dashboard, memories, tasks, media
+Submission Files/ Hackathon architecture diagram (architecture.html)
 infrastructure/   Terraform for Alibaba Cloud deployment
 scripts/          Benchmark suite, E2E verification, and results
 docs/             Architecture, roadmap, upgrade notes
@@ -169,6 +183,7 @@ docs/             Architecture, roadmap, upgrade notes
 ## Further reading
 
 - **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)** — system diagram and data flows
+- **[Submission Files/architecture.html](Submission%20Files/architecture.html)** — hackathon submission architecture (open in browser)
 - **[DEMO_SCRIPT.md](DEMO_SCRIPT.md)** — 3‑minute hackathon demo script
 - **[BLOG_POST.md](BLOG_POST.md)** — short project narrative for Medium/dev.to
 - **[docs/MEMORIA_DEVELOPMENT_ROADMAP.md](docs/MEMORIA_DEVELOPMENT_ROADMAP.md)** — module‑by‑module build plan

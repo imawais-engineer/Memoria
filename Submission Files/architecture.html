@@ -2,7 +2,8 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8" />
-<title>Memoria System Architecture</title>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Memoria System Architecture — Qwen Cloud Hackathon</title>
 <style>
   :root {
     --ink: #0f172a;
@@ -13,157 +14,110 @@
     --ai: #f3e8ff; --ai-b: #7e22ce; --ai-t: #581c87;
     --db: #dcfce7; --db-b: #15803d; --db-t: #14532d;
     --bg: #f8fafc;
+    --accent: #6c8cff;
+    --accent2: #48d597;
   }
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body {
     font-family: "Segoe UI", Inter, system-ui, sans-serif;
     background: var(--bg);
     color: var(--ink);
-    width: 1600px;
+    max-width: 1600px;
+    margin: 0 auto;
     padding: 36px 40px 48px;
   }
-  header {
-    text-align: center;
-    margin-bottom: 28px;
+  header { text-align: center; margin-bottom: 28px; }
+  header h1 { font-size: 34px; letter-spacing: -0.02em; margin-bottom: 6px; }
+  header p { color: var(--muted); font-size: 16px; max-width: 900px; margin: 0 auto; }
+  .badge-row {
+    display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; margin: 16px 0 24px;
   }
-  header h1 {
-    font-size: 34px;
-    letter-spacing: -0.02em;
-    margin-bottom: 6px;
+  .badge {
+    display: inline-block; padding: 4px 12px; border-radius: 999px;
+    font-size: 12px; font-weight: 700; background: #e2e8f0; color: var(--ink);
   }
-  header p {
-    color: var(--muted);
-    font-size: 16px;
-  }
+  .badge.accent { background: linear-gradient(135deg, #dbeafe, #dcfce7); border: 1px solid #94a3b8; }
   .legend {
-    display: flex;
-    justify-content: center;
-    gap: 22px;
-    margin: 18px 0 28px;
-    font-size: 13px;
-    font-weight: 600;
+    display: flex; justify-content: center; gap: 22px; margin: 18px 0 28px;
+    font-size: 13px; font-weight: 600; flex-wrap: wrap;
   }
-  .legend span {
-    display: inline-flex;
-    align-items: center;
-    gap: 8px;
-  }
-  .swatch {
-    width: 18px; height: 18px; border-radius: 4px;
-    border: 2px solid;
-  }
+  .legend span { display: inline-flex; align-items: center; gap: 8px; }
+  .swatch { width: 18px; height: 18px; border-radius: 4px; border: 2px solid; }
   .swatch.fe { background: var(--fe); border-color: var(--fe-b); }
   .swatch.be { background: var(--be); border-color: var(--be-b); }
   .swatch.ai { background: var(--ai); border-color: var(--ai-b); }
   .swatch.db { background: var(--db); border-color: var(--db-b); }
 
   .layer {
-    border: 2px solid;
-    border-radius: 16px;
-    padding: 18px 20px 20px;
-    margin: 0 auto;
-    position: relative;
-    background: #fff;
+    border: 2px solid; border-radius: 16px; padding: 18px 20px 20px;
+    margin: 0 auto 0; position: relative; background: #fff;
   }
-  .layer h2 {
-    font-size: 15px;
-    text-transform: uppercase;
-    letter-spacing: 0.06em;
-    margin-bottom: 14px;
-  }
-  .cards {
-    display: flex;
-    gap: 14px;
-    justify-content: center;
-    flex-wrap: wrap;
-  }
+  .layer h2 { font-size: 15px; text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 14px; }
+  .cards { display: flex; gap: 14px; justify-content: center; flex-wrap: wrap; }
   .card {
-    border: 2px solid;
-    border-radius: 12px;
-    padding: 14px 16px;
-    min-width: 200px;
-    max-width: 280px;
-    flex: 1;
+    border: 2px solid; border-radius: 12px; padding: 14px 16px;
+    min-width: 180px; max-width: 300px; flex: 1;
   }
-  .card strong {
-    display: block;
-    font-size: 15px;
-    margin-bottom: 6px;
-  }
-  .card p {
-    font-size: 13px;
-    line-height: 1.35;
-    color: var(--muted);
-  }
+  .card strong { display: block; font-size: 14px; margin-bottom: 6px; }
+  .card p { font-size: 12px; line-height: 1.4; color: var(--muted); }
+  .card ul { margin: 6px 0 0 16px; font-size: 12px; color: var(--muted); line-height: 1.45; }
 
   .fe { border-color: var(--fe-b); }
   .fe h2, .card.fe strong { color: var(--fe-t); }
   .card.fe { background: var(--fe); border-color: var(--fe-b); }
-
   .be { border-color: var(--be-b); }
   .be h2, .card.be strong { color: var(--be-t); }
   .card.be { background: var(--be); border-color: var(--be-b); }
-
   .ai { border-color: var(--ai-b); }
   .ai h2, .card.ai strong { color: var(--ai-t); }
   .card.ai { background: var(--ai); border-color: var(--ai-b); }
-
   .db { border-color: var(--db-b); }
   .db h2, .card.db strong { color: var(--db-t); }
   .card.db { background: var(--db); border-color: var(--db-b); }
 
   .arrow {
-    text-align: center;
-    padding: 10px 0;
-    color: var(--line);
-    font-size: 13px;
-    font-weight: 600;
+    text-align: center; padding: 10px 0; color: var(--line);
+    font-size: 13px; font-weight: 600;
   }
-  .arrow .shaft {
-    font-size: 28px;
-    line-height: 1;
-    color: var(--ink);
-  }
-  .split {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 24px;
-    margin-top: 0;
+  .arrow .shaft { font-size: 28px; line-height: 1; color: var(--ink); }
+  .split { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+  .chip {
+    display: inline-block; background: #e2e8f0; border-radius: 999px;
+    padding: 2px 10px; font-size: 11px; font-weight: 600; color: var(--ink); margin: 2px 4px;
   }
   .flow-note {
-    margin-top: 28px;
-    border: 1px solid #cbd5e1;
-    border-radius: 12px;
-    background: #fff;
-    padding: 16px 20px;
+    margin-top: 28px; border: 1px solid #cbd5e1; border-radius: 12px;
+    background: #fff; padding: 16px 20px;
   }
-  .flow-note h3 {
-    font-size: 15px;
-    margin-bottom: 10px;
-  }
-  .flow-note ol {
-    margin-left: 20px;
-    color: var(--muted);
-    font-size: 14px;
-    line-height: 1.55;
-  }
+  .flow-note h3 { font-size: 15px; margin-bottom: 10px; }
+  .flow-note ol { margin-left: 20px; color: var(--muted); font-size: 14px; line-height: 1.55; }
   .flow-note li strong { color: var(--ink); }
-  .chip {
-    display: inline-block;
-    background: #e2e8f0;
-    border-radius: 999px;
-    padding: 2px 10px;
-    font-size: 12px;
-    font-weight: 600;
-    color: var(--ink);
-    margin-right: 6px;
+  .tiers {
+    margin-top: 24px; display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px;
+  }
+  .tier {
+    background: #fff; border: 1px solid #cbd5e1; border-radius: 12px; padding: 14px 16px;
+  }
+  .tier h4 { font-size: 13px; margin-bottom: 6px; color: var(--ink); }
+  .tier p { font-size: 12px; color: var(--muted); line-height: 1.45; }
+  @media (max-width: 1100px) {
+    .split, .tiers { grid-template-columns: 1fr; }
+    body { padding: 24px 16px; }
   }
 </style>
 </head>
 <body>
   <header>
     <h1>Memoria — System Architecture</h1>
-    <p>Qwen Cloud Hackathon · Track 1 – MemoryAgent · How Frontend, Backend, Qwen Cloud, and Databases connect</p>
+    <p>Qwen Cloud Hackathon · Track 1 – MemoryAgent · Self‑Evolving Personal AI with Human‑like Memory</p>
+    <div class="badge-row">
+      <span class="badge accent">React + Vite Dashboard</span>
+      <span class="badge">FastAPI :8000</span>
+      <span class="badge">PostgreSQL 16 + pgvector</span>
+      <span class="badge">Redis + Celery</span>
+      <span class="badge">Qwen Cloud DashScope</span>
+      <span class="badge">MCP Memory Skills</span>
+    </div>
   </header>
 
   <div class="legend">
@@ -173,17 +127,24 @@
     <span><i class="swatch db"></i> Database &amp; Cache</span>
   </div>
 
-  <!-- Layer 1: Frontend -->
   <section class="layer fe">
-    <h2>1 · Frontend</h2>
+    <h2>1 · Frontend — React + Vite :5173</h2>
     <div class="cards">
       <div class="card fe">
-        <strong>React + Vite Dashboard</strong>
-        <p>Chat, Memory tab, Persona, Auth. Markdown + LaTeX rendering. Live UI on port 5173.</p>
+        <strong>Public Landing + Auth</strong>
+        <p>Marketing page at <code>/</code> · signup/login at <code>/auth</code> (username + favorite book).</p>
       </div>
       <div class="card fe">
-        <strong>External Agents MCP</strong>
-        <p>Third-party Qwen agents discover and call Memoria memory skills over HTTP.</p>
+        <strong>App Dashboard <code>/app</code></strong>
+        <ul>
+          <li>Chat (SSE streaming, slash commands, PI toggle)</li>
+          <li>Memories · Persona · Tasks · Media</li>
+          <li>Settings · Help · Feedback · About</li>
+        </ul>
+      </div>
+      <div class="card fe">
+        <strong>Multimodal UI</strong>
+        <p>Inline /imagine, /gen_video, /gen_voice · Markdown + LaTeX · model switcher · media library with download/delete.</p>
       </div>
     </div>
   </section>
@@ -191,25 +152,30 @@
   <div class="arrow">
     <div class="shaft">↓</div>
     <span class="chip">POST /chat</span>
+    <span class="chip">POST /chat/stream</span>
+    <span class="chip">GET /api/*</span>
     <span class="chip">GET /mcp/memory-skills</span>
     reply ↑
   </div>
 
-  <!-- Layer 2: Backend -->
   <section class="layer be">
-    <h2>2 · Backend — FastAPI :8000 + Celery</h2>
+    <h2>2 · Backend — FastAPI + Celery Workers</h2>
     <div class="cards">
       <div class="card be">
         <strong>API Layer</strong>
-        <p>/chat · /auth · /api/memories · /api/feedback · /mcp/memory-skills</p>
+        <p>/chat · /auth · /api/memories · /api/tasks · /api/generate · /api/feedback · /api/sessions</p>
       </div>
       <div class="card be">
         <strong>Agent Service</strong>
-        <p>Loads session + personal memory, builds prompt with PI / MemoryLess modes, calls Qwen.</p>
+        <p>Redis session + pgvector retrieval · PI / MemoryLess scoping · persona · product knowledge base · Qwen call.</p>
       </div>
       <div class="card be">
-        <strong>Celery Workers</strong>
-        <p>Ingestion extract · daily decay · weekly consolidation. Never blocks the chat path.</p>
+        <strong>Memory Pipeline</strong>
+        <p>Ingestion · conflict detection · reflection · consolidation · decay · hybrid retrieval (similarity × importance × recency).</p>
+      </div>
+      <div class="card be">
+        <strong>Celery Beat Schedule</strong>
+        <p>Daily 03:00 UTC decay · weekly Sun 04:00 UTC consolidation · async extract_memories after each chat turn.</p>
       </div>
       <div class="card be">
         <strong>MCP Memory Skills</strong>
@@ -223,22 +189,21 @@
     Backend talks to <strong>Qwen Cloud</strong> and <strong>Databases</strong> in parallel
   </div>
 
-  <!-- Layer 3: Qwen + DB side by side -->
   <div class="split">
     <section class="layer ai">
-      <h2>3 · Qwen Cloud DashScope</h2>
+      <h2>3 · Qwen Cloud (DashScope)</h2>
       <div class="cards">
         <div class="card ai">
-          <strong>Qwen-Plus</strong>
-          <p>Chat replies · function-call memory extraction · conflict detection · reflection JSON</p>
-        </div>
-        <div class="card ai">
-          <strong>Qwen-Max</strong>
-          <p>Weekly consolidation — clusters similar memories into structured summaries</p>
+          <strong>Qwen-Plus / Max / Turbo</strong>
+          <p>Chat replies · streaming SSE · function-call memory extraction · structured JSON for consolidation &amp; reflection.</p>
         </div>
         <div class="card ai">
           <strong>text-embedding-v3</strong>
-          <p>1024-dim embeddings for queries and stored personal memories</p>
+          <p>1024-dim embeddings for queries and stored personal memories.</p>
+        </div>
+        <div class="card ai">
+          <strong>Multimodal APIs</strong>
+          <p>wan2.1-t2i-plus images · wan2.1-t2v-turbo video · qwen3-tts-flash voice overviews.</p>
         </div>
       </div>
     </section>
@@ -248,28 +213,56 @@
       <div class="cards">
         <div class="card db">
           <strong>Redis</strong>
-          <p>Session Memory (last 10 msgs) + Celery broker / result backend</p>
+          <p>Session Memory (last 10 msgs, 7-day TTL) + Celery broker / result backend.</p>
         </div>
         <div class="card db">
-          <strong>PostgreSQL 16 + pgvector</strong>
-          <p>Personal Memory store — hybrid search: similarity × importance × recency</p>
+          <strong>PostgreSQL + pgvector</strong>
+          <p>Personal Memory — types: core, episodic, semantic, procedural, goal, preference.</p>
         </div>
         <div class="card db">
           <strong>Context Archive</strong>
-          <p>Full chat_messages transcripts for on-demand search (non-MemoryLess)</p>
+          <p><code>chat_messages</code> full transcripts · tasks · generated_assets · users &amp; sessions.</p>
         </div>
       </div>
     </section>
   </div>
 
+  <div class="tiers">
+    <div class="tier">
+      <h4>Session Memory (Redis)</h4>
+      <p>Last 10 messages always in prompt context.</p>
+    </div>
+    <div class="tier">
+      <h4>Personal Intelligence ON</h4>
+      <p>Retrieve all user memories across chats.</p>
+    </div>
+    <div class="tier">
+      <h4>Personal Intelligence OFF</h4>
+      <p>Current session memories + core facts only.</p>
+    </div>
+    <div class="tier">
+      <h4>MemoryLess Mode</h4>
+      <p>No personal memory read/write; no archive; media disabled.</p>
+    </div>
+    <div class="tier">
+      <h4>Slash Commands</h4>
+      <p>/imagine · /tasks_list · /list_memory · /memorize · type / for full help table.</p>
+    </div>
+    <div class="tier">
+      <h4>Benchmark</h4>
+      <p>+77.6% composite score improvement with memory (12 scenarios).</p>
+    </div>
+  </div>
+
   <div class="flow-note">
-    <h3>Primary data flow — how Qwen Cloud connects to backend, database, and frontend</h3>
+    <h3>Primary data flows</h3>
     <ol>
-      <li><strong>Frontend → Backend:</strong> User message via <code>POST /chat</code> from the React dashboard.</li>
-      <li><strong>Backend → Database:</strong> Agent reads Session Memory from Redis and retrieves Personal Memories from PostgreSQL + pgvector.</li>
-      <li><strong>Backend → Qwen Cloud:</strong> Agent sends packed context + message to <strong>Qwen-Plus</strong>; embeds the query with <strong>text-embedding-v3</strong>.</li>
-      <li><strong>Qwen Cloud → Backend → Frontend:</strong> Personalized reply returns through FastAPI and renders in chat (Markdown / LaTeX).</li>
-      <li><strong>Backend → Celery → Qwen → Database:</strong> Async workers call Qwen-Plus / Qwen-Max to extract, consolidate, and write memories back to PostgreSQL.</li>
+      <li><strong>Frontend → Backend:</strong> User message via <code>POST /chat</code> or <code>POST /chat/stream</code> from the React dashboard.</li>
+      <li><strong>Backend → Database:</strong> Agent reads Session Memory from Redis; retrieves Personal Memories from PostgreSQL + pgvector (scoped by PI / MemoryLess).</li>
+      <li><strong>Backend → Qwen Cloud:</strong> Packed memory context + persona + product knowledge + message sent to Qwen; query embedded with text-embedding-v3.</li>
+      <li><strong>Qwen → Backend → Frontend:</strong> Personalized reply (Markdown/LaTeX) streams or returns through FastAPI.</li>
+      <li><strong>Async pipeline:</strong> Celery worker extracts memories via Qwen function calling → embed → store; Beat jobs decay and consolidate on schedule.</li>
+      <li><strong>MCP:</strong> External agents discover tools at <code>GET /mcp/memory-skills</code> and invoke memory operations with ownership checks.</li>
     </ol>
   </div>
 </body>
