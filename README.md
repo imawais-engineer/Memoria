@@ -31,7 +31,7 @@
 - **Structured output** – Qwen structured JSON responses power consolidation, reflection, and conflict resolution with schema fallbacks.
 - **Benchmark‑proven 77.6% improvement** – 12‑scenario evaluation shows memory‑augmented replies score **77.6% higher** on average (see [Benchmark](#benchmark) below).
 - **Markdown + LaTeX chat rendering** – assistant replies render rich Markdown and KaTeX math (`$...$`, `$$...$$`) in the dashboard.
-- **Multimodal generation in chat** – use `/imagine`, `/gen_video`, and `/gen_voice` slash commands in chat for inline images (`wan2.1-t2i-plus`), videos (`wan2.1-t2v-turbo`), and voice overviews (Qwen summary + `qwen3-tts-flash`). All media uses DashScope default settings (no per-user size/duration controls). Per-user quotas (reset on upgrade): **10 chat messages**, **5 images**, **2 videos**, **2 voice generations**; exceeding a limit returns HTTP 429.
+- **Multimodal generation in chat** – use `/imagine`, `/gen_video`, and `/gen_voice` slash commands in chat for inline images (`wan2.1-t2i-plus`), videos (`wan2.1-t2v-turbo`), and voice overviews (Qwen summary + `qwen3-tts-flash`). All media uses DashScope default settings (no per-user size/duration controls). Per-user quotas (reset on upgrade): **20 chat messages**, **5 images**, **5 videos**, **5 voice generations**; exceeding a limit returns HTTP 429.
 - **Chat model switcher** – choose among `qwen-plus`, `qwen-max`, `qwq-plus`, and `qwen-turbo` per session via `GET /api/models` and the chat composer dropdown.
 - **Unified dark dashboard** – public landing page at `/`, auth at `/auth`, full app at `/app` with high-contrast typography and consistent blue→green accent gradient.
 - **Deployment on Azure + Alibaba Cloud Terraform proof** – live instance on Azure; full stack IaC for Alibaba Cloud in [`infrastructure/acs_deployment.tf`](infrastructure/acs_deployment.tf).
@@ -71,7 +71,7 @@ See [`.env.example`](.env.example) for all supported variables (`DATABASE_URL`, 
 
 ```bash
 docker compose up --build -d
-docker compose run --rm backend alembic upgrade head   # apply DB migrations
+docker compose exec backend alembic upgrade head   # apply DB migrations
 # backend now on http://localhost:8000  (health: /health, docs: /docs)
 ```
 
@@ -86,7 +86,7 @@ docker compose run --rm backend alembic upgrade head   # apply DB migrations
 >
 > ```bash
 > docker compose down && docker compose up -d --build
-> docker compose run --rm backend alembic upgrade head
+> docker compose exec backend alembic upgrade head
 > ```
 
 Then start the dashboard:
@@ -96,25 +96,6 @@ cd frontend && npm install && npm run dev   # http://localhost:5173
 ```
 
 Open **http://localhost:5173** — you'll see the Memoria **landing page** at `/`. Click **Get Started** to open `/auth`, then sign up or log in (username + favorite book). After login you're taken to `/app` with a **fresh blank chat**; past sessions appear under **Recent Chats** in the sidebar.
-
-### 2c. Alibaba Cloud ECS (production)
-
-Terraform in [`infrastructure/acs_deployment.tf`](infrastructure/acs_deployment.tf) provisions ECS,
-ApsaraDB PostgreSQL (pgvector), and ApsaraDB Redis. The ECS host runs the backend
-via Docker Compose; **database state lives in ApsaraDB**, not on the container
-filesystem.
-
-When updating the app on ECS:
-
-```bash
-docker compose down && docker compose up -d --build
-docker compose run --rm backend alembic upgrade head
-```
-
-**Never use `docker compose down -v` on any environment** — on local Compose it
-deletes the `pgdata` volume (all memories, chats, and media). On ECS, avoid any
-workflow that recreates managed databases from scratch unless you intend a full
-reset.
 
 **Dashboard views:** Chat · Memories · Persona · Tasks · Media · Settings · Help · Feedback · About (via profile menu).
 
@@ -139,6 +120,25 @@ celery -A celery_app beat   --loglevel=info
 # Frontend (separate shell)
 cd frontend && npm install && npm run dev   # http://localhost:5173
 ```
+
+### 2c. Alibaba Cloud ECS (production)
+
+Terraform in [`infrastructure/acs_deployment.tf`](infrastructure/acs_deployment.tf) provisions ECS,
+ApsaraDB PostgreSQL (pgvector), and ApsaraDB Redis. The ECS host runs the backend
+via Docker Compose; **database state lives in ApsaraDB**, not on the container
+filesystem.
+
+When updating the app on ECS:
+
+```bash
+docker compose down && docker compose up -d --build
+docker compose exec backend alembic upgrade head
+```
+
+**Never use `docker compose down -v` on any environment** — on local Compose it
+deletes the `pgdata` volume (all memories, chats, and media). On ECS, avoid any
+workflow that recreates managed databases from scratch unless you intend a full
+reset.
 
 ---
 
@@ -181,7 +181,7 @@ The script signs up a test user, exercises chat/memory, Personal Intelligence to
 
 ## Demo video
 
-📺 **[YouTube URL TBD]** &nbsp;•&nbsp; script: **[DEMO_SCRIPT.md](DEMO_SCRIPT.md)**
+📺 **[https://youtu.be/ANFAl6bwjjI](https://youtu.be/ANFAl6bwjjI)** &nbsp;•&nbsp; script: **[DEMO_SCRIPT.md](DEMO_SCRIPT.md)**
 
 ---
 
