@@ -49,7 +49,7 @@ Memoria is a modular FastAPI backend plus a React dashboard:
 
 See the full component breakdown, sequence flows, and Mermaid diagram in **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)**.
 
-**Hackathon submission diagram:** open [`Submission Files/architecture.html`](Submission%20Files/architecture.html) in a browser for a judge-friendly layered architecture view.
+**Hackathon submission diagram:** open [https://imawais-engineer.github.io/Memoria/Submission%20Files/architecture.html](https://imawais-engineer.github.io/Memoria/Submission%20Files/architecture.html) in a browser for a judge-friendly layered architecture view.
 
 ---
 
