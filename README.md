@@ -181,7 +181,7 @@ The script signs up a test user, exercises chat/memory, Personal Intelligence to
 
 ## Demo video
 
-📺 **[https://youtu.be/ANFAl6bwjjI](https://youtu.be/ANFAl6bwjjI)** &nbsp;•&nbsp; script: **[DEMO_SCRIPT.md](DEMO_SCRIPT.md)**
+📺 **[https://youtu.be/ANFAl6bwjjI](https://youtu.be/ANFAl6bwjjI)**
 
 ---
 
@@ -216,7 +216,6 @@ docs/             Architecture, roadmap, upgrade notes
 
 - **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)** — system diagram and data flows
 - **[Submission Files/architecture.html](Submission%20Files/architecture.html)** — hackathon submission architecture (open in browser)
-- **[DEMO_SCRIPT.md](DEMO_SCRIPT.md)** — 3‑minute hackathon demo script
 - **[BLOG_POST.md](BLOG_POST.md)** — short project narrative for Medium/dev.to
 - **[docs/MEMORIA_DEVELOPMENT_ROADMAP.md](docs/MEMORIA_DEVELOPMENT_ROADMAP.md)** — module‑by‑module build plan
 
