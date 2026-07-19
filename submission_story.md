@@ -1,4 +1,4 @@
-### Memoria – A Self‑Evolving Personal AI with Human‑like Memory
+# Memoria – A Self‑Evolving Personal AI with Human‑like Memory
 
 Most AI assistants forget everything after each session. Memoria remembers, forgets, and evolves—extracting personal facts, resolving contradictions, and reflecting on what it knows. This post shares the journey of building a production‑ready MemoryAgent for the **Qwen Cloud Hackathon, Track 1**.
 
