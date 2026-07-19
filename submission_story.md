@@ -1,10 +1,4 @@
----
-title: "Memoria – A Self‑Evolving Personal AI with Human‑like Memory"
-published: true
-tags: qwen, alibabacloud, ai, hackathon
-canonical_url: https://dev.to/imawais/memoria-a-self-evolving-personal-ai-with-human-like-memory
-cover_image: https://raw.githubusercontent.com/imawais-engineer/Memoria/main/Submission%20Files/Dashboard.png
----
+### Memoria – A Self‑Evolving Personal AI with Human‑like Memory
 
 Most AI assistants forget everything after each session. Memoria remembers, forgets, and evolves—extracting personal facts, resolving contradictions, and reflecting on what it knows. This post shares the journey of building a production‑ready MemoryAgent for the **Qwen Cloud Hackathon, Track 1**.
 
