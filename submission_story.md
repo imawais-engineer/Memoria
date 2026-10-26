@@ -43,7 +43,7 @@ Other key features:
 - **Markdown + LaTeX rendering** – needed multiple plugins and preprocessing.
 - **Performance with conflict detection and reflection** – kept latency low by running them asynchronously in Celery.
 
-## What we learned
+## Key engineering insights
 
 - **Human‑like memory is harder than simple RAG** – it needs importance, decay, consolidation, and conflict resolution.
 - **Qwen's tool‑calling and structured JSON output** make LLM pipelines reliable.
