@@ -1,0 +1,82 @@
+---
+import Layout from '../layouts/Layout.astro';
+import PageHead from '../components/PageHead.astro';
+import CodeBlock from '../components/CodeBlock.astro';
+import { GITHUB_URL, GITHUB_BLOB } from '../config';
+
+const clone = `git clone https://github.com/imawais-engineer/Memoria.git
+cd Memoria
+cp .env.example .env`;
+const envVars = `DASHSCOPE_API_KEY=your_dashscope_api_key
+# Only for international-region keys:
+DASHSCOPE_BASE_URL=https://dashscope-intl.aliyuncs.com/api/v1
+DATABASE_URL=postgresql+asyncpg://user:pass@localhost/memoria
+REDIS_URL=redis://localhost:6379/0
+SECRET_KEY=your_random_secret_key`;
+const compose = `docker compose up --build -d
+docker compose exec backend alembic upgrade head   # apply DB migrations
+# backend now on http://localhost:8000  (health: /health, docs: /docs)`;
+const safe = `docker compose down && docker compose up -d --build
+docker compose exec backend alembic upgrade head`;
+const fe = `cd frontend && npm install && npm run dev   # http://localhost:5173`;
+const local = `# Backend
+cd backend
+python -m venv .venv && source .venv/bin/activate
+pip install -r requirements.txt
+alembic upgrade head
+uvicorn app.main:app --reload           # http://localhost:8000
+
+# Background workers (separate shells, from backend/)
+celery -A celery_app worker --loglevel=info
+celery -A celery_app beat   --loglevel=info
+
+# Frontend (separate shell)
+cd frontend && npm install && npm run dev   # http://localhost:5173`;
+---
+<Layout title="Get Started: Clone and Run Memoria from GitHub | Memoria" description="Clone Memoria from GitHub, set up .env, start Docker Compose, run migrations and the frontend, or run everything locally without Docker." path="/get-started" breadcrumb="Get started">
+  <PageHead title="Get started with Memoria" lead="Clone the repository, add a DashScope API key, start the stack with Docker Compose, then open the dashboard." />
+  <div class="wrap">
+   <div class="prose-m">
+    <h2 id="prerequisites">Prerequisites</h2>
+    <ul>
+      <li>Git.</li>
+      <li>A DashScope (Qwen Cloud) API key.</li>
+      <li>For Docker Compose: Docker with the Compose plugin. Node 18 or newer for the dashboard.</li>
+      <li>Without Docker: Python 3.12, Node 18+, PostgreSQL 16 with the pgvector extension, and Redis.</li>
+    </ul>
+
+    <h2 id="clone">1. Clone and configure</h2>
+    <CodeBlock code={clone} />
+    <p>Open <code>.env</code> and set <code>DASHSCOPE_API_KEY</code>. If your key is for the international DashScope endpoint, also set <code>DASHSCOPE_BASE_URL</code>. Never commit <code>.env</code>. See <a href={`${GITHUB_BLOB}/.env.example`} rel="noopener">.env.example</a> for every variable. Example shape, with placeholders only:</p>
+    <CodeBlock code={envVars} label=".env" />
+
+    <h2 id="docker">2. Run with Docker Compose</h2>
+    <p>This starts the backend, PostgreSQL with pgvector, Redis and the Celery workers.</p>
+    <CodeBlock code={compose} />
+    <div class="warn" role="note">
+      <p class="!mt-0 !text-ink"><strong>Never run <code>docker compose down -v</code>.</strong></p>
+      <p>PostgreSQL data lives in the <code>pgdata</code> Docker volume and Redis chat history in <code>redisdata</code>. The <code>-v</code> flag deletes volumes, which erases all memories, chats and media. To update and keep your data, run:</p>
+      <CodeBlock code={safe} />
+    </div>
+
+    <h2 id="frontend">3. Start the dashboard</h2>
+    <CodeBlock code={fe} />
+    <p>Open <code>http://localhost:5173</code>. You see the landing page at <code>/</code>. Click <strong>Get Started</strong> to open <code>/auth</code>, then sign up or log in with a username and favorite book.</p>
+
+    <h2 id="no-docker">Run without Docker</h2>
+    <CodeBlock code={local} />
+
+    <h2 id="first-run">First-run walkthrough</h2>
+    <ol>
+      <li>Sign up on <code>/auth</code>. You land on <code>/app</code> with a blank chat.</li>
+      <li>Tell the assistant a few facts about yourself, such as a food you avoid or a goal.</li>
+      <li>Open <strong>New Chat</strong> and ask for a recommendation. It can recall your facts from the earlier chat.</li>
+      <li>Open <strong>Memories</strong> to see what was stored.</li>
+      <li>Type <code>/</code> in chat for the command table. Try <code>/memorize</code>, <code>/list_memory</code> or <code>/imagine</code>.</li>
+      <li>Turn on the <strong>Memoryless</strong> toggle on an empty chat to try a private session.</li>
+    </ol>
+    <p>The backend health check is at <code>http://localhost:8000/health</code>, and API docs at <code>http://localhost:8000/docs</code>.</p>
+    <p>Stuck? See the <a href="/docs#troubleshooting">troubleshooting notes</a>. Source and issues: <a href={GITHUB_URL} rel="noopener">GitHub</a>.</p>
+   </div>
+  </div>
+</Layout>

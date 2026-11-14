@@ -1,0 +1,50 @@
+---
+import Layout from '../layouts/Layout.astro';
+import PageHead from '../components/PageHead.astro';
+import Shot from '../components/Shot.astro';
+import CodeBlock from '../components/CodeBlock.astro';
+import { GITHUB_BLOB } from '../config';
+import results from '../data/benchmark_results.json';
+
+const rerun = `cd backend && python ../scripts/benchmark.py`;
+const fmt = (n: number) => n.toFixed(2);
+const avg = (k: 'without' | 'with', m: 'accuracy' | 'safety' | 'coherence') =>
+  results.scenarios.reduce((a, s) => a + s[k][m], 0) / results.scenarios.length;
+const composite = (k: 'without' | 'with') => (avg(k, 'accuracy') + avg(k, 'safety') + avg(k, 'coherence')) / 3;
+const pct = (n: number) => `${n > 0 ? '+' : ''}${n}%`;
+const p = results.user_profile;
+---
+<Layout title="Memoria Benchmark: 12 Scenarios, +77.6% Score | Memoria" description="How Memoria was benchmarked: 12 scenarios compared with and without stored memories on Qwen-Plus, scored for accuracy, safety and coherence." path="/benchmark" breadcrumb="Benchmark">
+  <PageHead title="Memoria benchmark" lead="The same Qwen model answers 12 realistic requests twice, once with stored user memories and once without. Memory-augmented replies score 77.6% higher on average." />
+  <div class="wrap">
+    <h2 class="h2">Method</h2>
+    <ul class="mt-4 space-y-2 text-muted max-w-3xl list-disc pl-5">
+      <li>Model: <code>{results.model}</code>. Script: <a href={`${GITHUB_BLOB}/scripts/benchmark.py`} rel="noopener">scripts/benchmark.py</a>.</li>
+      <li>A fixed test profile is stored as memories: allergies ({p.allergies.join(', ')}), a {p.dietary} diet, interests ({p.interests.join(', ')}) and goals ({p.goals.join(', ')}).</li>
+      <li>Each scenario runs once without memories and once with memories retrieved through <code>retrieve_context</code>.</li>
+      <li>Replies are scored from 0 to 1 on accuracy, safety and coherence. The composite is the mean of the three.</li>
+    </ul>
+
+    <h2 class="h2">Averages</h2>
+    <div class="tbl-wrap max-w-2xl"><table class="tbl"><thead><tr><th>Metric</th><th>Without memory</th><th>With memory</th></tr></thead><tbody>
+      <tr><td>Average accuracy</td><td>{fmt(avg('without', 'accuracy'))}</td><td>{fmt(avg('with', 'accuracy'))}</td></tr>
+      <tr><td>Average composite</td><td>{fmt(composite('without'))}</td><td>{fmt(composite('with'))}</td></tr>
+      <tr><td>Average improvement</td><td>n/a</td><td>{pct(results.avg_improvement)}</td></tr>
+    </tbody></table></div>
+
+    <h2 class="h2">All 12 scenarios</h2>
+    <p class="mt-3 text-muted max-w-3xl">Scores are accuracy / safety / coherence. Two scenarios scored slightly lower with memory, and three did not change. Improvement is the change in composite score.</p>
+    <div class="tbl-wrap"><table class="tbl"><thead><tr><th>Scenario</th><th>Without</th><th>With</th><th>Improvement</th></tr></thead><tbody>
+      {results.scenarios.map((s) => (
+        <tr><td>{s.scenario}</td><td>{s.without.accuracy} / {s.without.safety} / {s.without.coherence}</td><td>{s.with.accuracy} / {s.with.safety} / {s.with.coherence}</td><td>{pct(s.improvement_pct)}</td></tr>
+      ))}
+    </tbody></table></div>
+
+    <h2 class="h2">Chart</h2>
+    <div class="mt-4 max-w-3xl"><Shot name="benchmark" alt="Bar chart comparing benchmark scores with and without memory across 12 scenarios" /></div>
+
+    <h2 class="h2">Re-run it</h2>
+    <p class="mt-3 text-muted max-w-3xl">Needs the database, a DashScope key and the backend dependencies. Full results are in <a href={`${GITHUB_BLOB}/scripts/benchmark_results.json`} rel="noopener">scripts/benchmark_results.json</a>.</p>
+    <div class="max-w-3xl"><CodeBlock code={rerun} /></div>
+  </div>
+</Layout>

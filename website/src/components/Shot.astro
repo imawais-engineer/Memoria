@@ -1,0 +1,7 @@
+---
+import images from '../images.json';
+interface Props { name: keyof typeof images; alt: string; eager?: boolean; class?: string; sizes?: string; }
+const { name, alt, eager = false, class: cls = '' } = Astro.props;
+const d = images[name];
+---
+<img src={`/img/${name}.webp`} width={d.width} height={d.height} alt={alt} loading={eager ? 'eager' : 'lazy'} decoding="async" class={`w-full h-auto rounded-xl border border-line ${cls}`} />

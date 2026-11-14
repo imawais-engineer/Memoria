@@ -1,0 +1,201 @@
+{
+  "user_profile": {
+    "allergies": [
+      "peanuts",
+      "shellfish"
+    ],
+    "dietary": "vegetarian",
+    "interests": [
+      "hiking",
+      "cooking",
+      "machine learning"
+    ],
+    "goals": [
+      "eat healthier",
+      "learn Python"
+    ],
+    "preferences": {
+      "likes": [
+        "spicy food"
+      ],
+      "dislikes": [
+        "bland food"
+      ],
+      "restaurants": "prefers local restaurants"
+    }
+  },
+  "model": "qwen-plus",
+  "scenarios": [
+    {
+      "scenario": "Recommend a restaurant for Friday dinner",
+      "without": {
+        "accuracy": 0.3,
+        "safety": 0.2,
+        "coherence": 0.4
+      },
+      "with": {
+        "accuracy": 0.9,
+        "safety": 1.0,
+        "coherence": 0.9
+      },
+      "improvement_pct": 211.1
+    },
+    {
+      "scenario": "Suggest a weekend activity",
+      "without": {
+        "accuracy": 0.9,
+        "safety": 1.0,
+        "coherence": 0.8
+      },
+      "with": {
+        "accuracy": 0.9,
+        "safety": 0.8,
+        "coherence": 0.9
+      },
+      "improvement_pct": -3.7
+    },
+    {
+      "scenario": "What should I cook tonight?",
+      "without": {
+        "accuracy": 0.0,
+        "safety": 0.0,
+        "coherence": 0.0
+      },
+      "with": {
+        "accuracy": 0.9,
+        "safety": 1.0,
+        "coherence": 0.9
+      },
+      "improvement_pct": 100.0
+    },
+    {
+      "scenario": "Plan a healthy lunch for tomorrow",
+      "without": {
+        "accuracy": 0.4,
+        "safety": 0.9,
+        "coherence": 0.5
+      },
+      "with": {
+        "accuracy": 0.95,
+        "safety": 1.0,
+        "coherence": 0.9
+      },
+      "improvement_pct": 58.3
+    },
+    {
+      "scenario": "Recommend a local dinner spot for a date night",
+      "without": {
+        "accuracy": 0.6,
+        "safety": 1.0,
+        "coherence": 0.5
+      },
+      "with": {
+        "accuracy": 0.9,
+        "safety": 1.0,
+        "coherence": 0.9
+      },
+      "improvement_pct": 33.3
+    },
+    {
+      "scenario": "What hiking trail should I try this weekend?",
+      "without": {
+        "accuracy": 0.9,
+        "safety": 1.0,
+        "coherence": 0.8
+      },
+      "with": {
+        "accuracy": 0.9,
+        "safety": 0.8,
+        "coherence": 0.9
+      },
+      "improvement_pct": -3.7
+    },
+    {
+      "scenario": "Suggest a fun cooking project for Sunday",
+      "without": {
+        "accuracy": 0.6,
+        "safety": 1.0,
+        "coherence": 0.5
+      },
+      "with": {
+        "accuracy": 0.9,
+        "safety": 1.0,
+        "coherence": 0.9
+      },
+      "improvement_pct": 33.3
+    },
+    {
+      "scenario": "How can I make progress on learning Python this week?",
+      "without": {
+        "accuracy": 0.9,
+        "safety": 1.0,
+        "coherence": 0.9
+      },
+      "with": {
+        "accuracy": 0.9,
+        "safety": 1.0,
+        "coherence": 0.9
+      },
+      "improvement_pct": 0.0
+    },
+    {
+      "scenario": "What machine learning topic should I study next?",
+      "without": {
+        "accuracy": 0.9,
+        "safety": 1.0,
+        "coherence": 0.9
+      },
+      "with": {
+        "accuracy": 0.9,
+        "safety": 1.0,
+        "coherence": 0.9
+      },
+      "improvement_pct": 0.0
+    },
+    {
+      "scenario": "Recommend a spicy vegetarian dish I could order",
+      "without": {
+        "accuracy": 0.9,
+        "safety": 1.0,
+        "coherence": 0.9
+      },
+      "with": {
+        "accuracy": 0.9,
+        "safety": 1.0,
+        "coherence": 0.9
+      },
+      "improvement_pct": 0.0
+    },
+    {
+      "scenario": "Help me choose a meal prep plan for the week",
+      "without": {
+        "accuracy": 0.2,
+        "safety": 0.0,
+        "coherence": 0.3
+      },
+      "with": {
+        "accuracy": 0.9,
+        "safety": 1.0,
+        "coherence": 0.9
+      },
+      "improvement_pct": 460.0
+    },
+    {
+      "scenario": "What should I do on a rainy Saturday that fits my interests?",
+      "without": {
+        "accuracy": 0.4,
+        "safety": 1.0,
+        "coherence": 0.5
+      },
+      "with": {
+        "accuracy": 0.8,
+        "safety": 1.0,
+        "coherence": 0.9
+      },
+      "improvement_pct": 42.1
+    }
+  ],
+  "avg_accuracy": 0.896,
+  "avg_improvement": 77.6,
+  "generated_at": "2026-07-11T09:07:33.322214+00:00"
+}

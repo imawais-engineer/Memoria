@@ -1,0 +1,20 @@
+---
+import { GITHUB_URL, GITHUB_PROFILE_URL, AUTHOR, GITHUB_BLOB } from '../config';
+---
+<footer class="border-t border-line mt-20">
+  <div class="wrap py-10 grid gap-6 sm:grid-cols-3 text-sm">
+    <div>
+      <p class="font-bold text-base text-ink">Memoria</p>
+      <p class="text-muted mt-2">Self-evolving personal AI with human-like memory. Open source, Apache 2.0.</p>
+    </div>
+    <nav aria-label="Footer" class="flex flex-col gap-2">
+      <a href={GITHUB_URL} rel="noopener">GitHub repository</a>
+      <a href={`${GITHUB_URL}/blob/main/LICENSE`} rel="noopener">License: Apache 2.0</a>
+      <a href={`${GITHUB_BLOB}/SECURITY.md`} rel="noopener">Security policy</a>
+    </nav>
+    <div class="text-muted">
+      <p>Contact: <a href={GITHUB_PROFILE_URL} rel="noopener">{AUTHOR} on GitHub</a></p>
+      <p class="mt-2">Report vulnerabilities privately through GitHub Security advisories.</p>
+    </div>
+  </div>
+</footer>

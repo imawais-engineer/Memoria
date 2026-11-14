@@ -1,0 +1,24 @@
+---
+interface Props { code: string; label?: string; }
+const { code, label = 'shell' } = Astro.props;
+---
+<div class="codeblock mt-4 rounded-xl border border-line bg-[#0b0e1a] overflow-hidden">
+  <div class="flex items-center justify-between px-3 py-1.5 border-b border-line bg-panel text-xs text-muted">
+    <span>{label}</span>
+    <button type="button" class="copy-btn btn !py-1 !px-3 !text-xs" data-code={code} aria-label={`Copy ${label} code`}>Copy</button>
+  </div>
+  <pre class="p-4 overflow-x-auto text-ink" tabindex="0"><code>{code}</code></pre>
+</div>
+<script>
+  document.addEventListener('click', async (e) => {
+    const btn = (e.target as HTMLElement).closest<HTMLButtonElement>('.copy-btn');
+    if (!btn) return;
+    try {
+      await navigator.clipboard.writeText(btn.dataset.code ?? '');
+      btn.textContent = 'Copied';
+    } catch {
+      btn.textContent = 'Press Ctrl+C';
+    }
+    setTimeout(() => (btn.textContent = 'Copy'), 2000);
+  });
+</script>

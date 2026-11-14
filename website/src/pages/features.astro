@@ -1,0 +1,89 @@
+---
+import Layout from '../layouts/Layout.astro';
+import PageHead from '../components/PageHead.astro';
+import Shot from '../components/Shot.astro';
+import { GITHUB_BLOB } from '../config';
+const cmds = [
+  ['/', 'Show the command help table', 'Free'],
+  ['/imagine <prompt>', 'Generate an image (wan2.1-t2i-plus)', 'AI quota'],
+  ['/gen_video <prompt>', 'Generate a video (wan2.1-t2v-turbo)', 'AI quota'],
+  ['/gen_voice <prompt>', 'Voice overview of the session (Qwen summary + qwen3-tts-flash)', 'AI quota'],
+  ['/memorize <fact>', 'Store a core memory manually', 'Free'],
+  ['/create_task <title>', 'Create a pending task', 'Free'],
+  ['/tasks_list', 'List pending tasks', 'Free'],
+  ['/task_complete <ID>', 'Mark a task complete', 'Free'],
+  ['/list_memory', 'List memories (all when Personal Intelligence is on, current chat only when off)', 'Free'],
+  ['/forget_memory <ID|ALL>', 'Delete one memory by list ID, or the whole scoped set', 'Free'],
+];
+const types = [
+  ['core', 'Never decays and is always packed into context first. Manual /memorize facts are stored as core.'],
+  ['episodic', 'Decay rate 0.02.'],
+  ['semantic', 'Decay rate 0.01. Consolidation summaries are stored as semantic memories.'],
+  ['procedural', 'Decay rate 0.005.'],
+  ['goal', 'Decay rate 0.01.'],
+  ['preference', 'Decay rate 0.01.'],
+];
+const tools = [
+  ['get_core_memories', 'Retrieve important memories for a user (importance of 7 or more).'],
+  ['get_user_preferences', 'Extract user preferences from memories.'],
+  ['forget_memory', 'Soft-delete a memory, with a reason.'],
+  ['strengthen_memory', 'Increase the importance of a memory (capped at 10).'],
+];
+const more = [
+  ['Persistent and cross-session memory', 'Facts are stored in PostgreSQL with pgvector and retrieved across separate chats.'],
+  ['Personal Intelligence', 'Toggle global memory access. When off, recall is limited to the current session plus core facts.'],
+  ['MemoryLess incognito sessions', 'Private chats that never read or write long-term memory. Media slash commands are disabled.'],
+  ['SSE streaming chat', 'Replies stream through POST /chat/stream, rendered with Markdown and KaTeX.'],
+  ['Forgetting and consolidation', 'Daily decay and weekly Qwen-Max consolidation.'],
+  ['Conflict detection', 'Contradicting facts are flagged and superseded during ingestion.'],
+  ['Reflective insights', 'Periodic Qwen reflection adds patterns about you to the system prompt.'],
+  ['Thumbs up and down feedback', 'Rate replies to strengthen or weaken the memories that informed them (POST /api/feedback).'],
+  ['Structured output', 'Qwen JSON responses drive consolidation, reflection and conflict resolution, with schema fallbacks.'],
+  ['Tasks and media library', 'Create tasks in chat. Browse generated images and videos, download them, or delete them permanently.'],
+  ['Persona', 'Set response length, tone and behaviour traits. They are added to the system prompt.'],
+  ['Product knowledge base', 'The AI carries a built-in reference of Memoria\'s own architecture and features.'],
+];
+---
+<Layout title="Memoria Features: Memory, Commands, Models and MCP | Memoria" description="Every Memoria feature: six memory types, Personal Intelligence, MemoryLess chats, slash commands, model switcher, usage quotas and MCP memory skills." path="/features" breadcrumb="Features">
+  <PageHead title="Memoria features" lead="Everything below is implemented in the repository. Quotas and model names come from the README." />
+  <div class="wrap">
+    <h2 class="h2">Core features</h2>
+    <ul class="mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      {more.map(([t, d]) => <li class="card"><h3 class="font-semibold">{t}</h3><p class="text-sm text-muted mt-2">{d}</p></li>)}
+    </ul>
+
+    <h2 class="h2" id="memory-types">Six memory types</h2>
+    <div class="tbl-wrap"><table class="tbl"><thead><tr><th>Type</th><th>Behaviour</th></tr></thead><tbody>
+      {types.map(([t, d]) => <tr><td><code>{t}</code></td><td>{d}</td></tr>)}
+    </tbody></table></div>
+
+    <h2 class="h2" id="slash-commands">Slash commands</h2>
+    <p class="mt-3 text-muted">Type <code>/</code> in chat for this table in the app. In MemoryLess sessions the media commands are disabled.</p>
+    <div class="tbl-wrap"><table class="tbl"><thead><tr><th>Command</th><th>What it does</th><th>Cost</th></tr></thead><tbody>
+      {cmds.map(([c, d, k]) => <tr><td><code>{c}</code></td><td>{d}</td><td>{k}</td></tr>)}
+    </tbody></table></div>
+    <div class="mt-5 max-w-3xl"><Shot name="commands" alt="Chat window showing the slash command help table" /></div>
+
+    <h2 class="h2" id="models">Model switcher</h2>
+    <p class="mt-3 text-muted max-w-3xl">Pick a chat model per session from the composer dropdown. The list comes from <code>GET /api/models</code>.</p>
+    <ul class="mt-3 flex flex-wrap gap-2">
+      {['qwen-plus', 'qwen-max', 'qwq-plus', 'qwen-turbo'].map((m) => <li class="px-3 py-1 rounded-full border border-line bg-panel"><code>{m}</code></li>)}
+    </ul>
+
+    <h2 class="h2" id="quotas">Per-user quotas</h2>
+    <p class="mt-3 text-muted max-w-3xl">Quotas reset on upgrade. Going over a limit returns HTTP 429. Media uses DashScope default settings, with no per-user size or duration controls.</p>
+    <div class="tbl-wrap max-w-md"><table class="tbl"><thead><tr><th>Resource</th><th>Limit</th></tr></thead><tbody>
+      <tr><td>Chat messages</td><td>20</td></tr><tr><td>Images</td><td>5</td></tr><tr><td>Videos</td><td>5</td></tr><tr><td>Voice generations</td><td>5</td></tr>
+    </tbody></table></div>
+
+    <h2 class="h2" id="mcp">MCP memory skills</h2>
+    <p class="mt-3 text-muted max-w-3xl">External agents discover four tools at <code>GET /mcp/memory-skills</code>. Source: <a href={`${GITHUB_BLOB}/backend/app/mcp/memory_skill.py`} rel="noopener">backend/app/mcp/memory_skill.py</a>.</p>
+    <div class="tbl-wrap"><table class="tbl"><thead><tr><th>Tool</th><th>Purpose</th></tr></thead><tbody>
+      {tools.map(([t, d]) => <tr><td><code>{t}</code></td><td>{d}</td></tr>)}
+    </tbody></table></div>
+
+    <h2 class="h2">Dashboard views</h2>
+    <p class="mt-3 text-muted max-w-3xl">Chat, Memories, Persona, Tasks, Media, Settings, Help, Feedback and About.</p>
+    <div class="mt-5"><Shot name="dashboard" alt="Memoria dashboard" /></div>
+  </div>
+</Layout>

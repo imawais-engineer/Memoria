@@ -1,0 +1,34 @@
+{
+  "dashboard": {
+    "width": 1600,
+    "height": 880
+  },
+  "commands": {
+    "width": 1600,
+    "height": 840
+  },
+  "about-01": {
+    "width": 1600,
+    "height": 840
+  },
+  "about-02": {
+    "width": 1600,
+    "height": 840
+  },
+  "about-03": {
+    "width": 1600,
+    "height": 840
+  },
+  "about-04": {
+    "width": 1600,
+    "height": 840
+  },
+  "architecture": {
+    "width": 1680,
+    "height": 1140
+  },
+  "benchmark": {
+    "width": 1200,
+    "height": 750
+  }
+}

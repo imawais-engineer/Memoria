@@ -1,0 +1,28 @@
+---
+import { NAV, GITHUB_URL, SITE_NAME } from '../config';
+const { path = '/' } = Astro.props;
+const active = (href: string) => (path === href ? 'page' : undefined);
+---
+<header class="sticky top-0 z-50 border-b border-line bg-bg/95 backdrop-blur">
+  <div class="wrap flex items-center justify-between gap-4 py-3">
+    <a href="/" class="flex items-center gap-2 font-bold text-ink no-underline hover:text-ink">
+      <img src="/favicon-48.png" width="28" height="28" alt="" />
+      <span>{SITE_NAME}</span>
+    </a>
+    <nav aria-label="Main" class="hidden lg:flex items-center gap-5">
+      {NAV.map((n) => (
+        <a href={n.href} aria-current={active(n.href)} class="text-muted no-underline hover:text-ink aria-[current=page]:text-ink aria-[current=page]:font-semibold">{n.label}</a>
+      ))}
+      <a class="btn" href={GITHUB_URL} rel="noopener">GitHub</a>
+    </nav>
+    <details class="lg:hidden relative">
+      <summary class="btn cursor-pointer list-none" aria-label="Menu">Menu</summary>
+      <nav aria-label="Mobile" class="absolute right-0 mt-2 w-64 card flex flex-col gap-3">
+        {NAV.map((n) => (
+          <a href={n.href} aria-current={active(n.href)} class="text-ink no-underline py-1">{n.label}</a>
+        ))}
+        <a class="btn" href={GITHUB_URL} rel="noopener">GitHub</a>
+      </nav>
+    </details>
+  </div>
+</header>
