@@ -16,18 +16,18 @@ const cmds = [
   ['/forget_memory <ID|ALL>', 'Delete one memory by list ID, or the whole scoped set', 'Free'],
 ];
 const types = [
-  ['core', 'Foundational facts about you. Never decay, always packed first.'],
-  ['episodic', 'Things that happened. Decay rate 0.02.'],
-  ['semantic', 'General facts and consolidated summaries. Decay rate 0.01.'],
-  ['procedural', 'How you do things. Decay rate 0.005.'],
-  ['goal', 'What you are working toward. Decay rate 0.01.'],
-  ['preference', 'Likes and dislikes. Decay rate 0.01.'],
+  ['core', 'Never decays and is always packed into context first. Manual /memorize facts are stored as core.'],
+  ['episodic', 'Decay rate 0.02.'],
+  ['semantic', 'Decay rate 0.01. Consolidation summaries are stored as semantic memories.'],
+  ['procedural', 'Decay rate 0.005.'],
+  ['goal', 'Decay rate 0.01.'],
+  ['preference', 'Decay rate 0.01.'],
 ];
 const tools = [
-  ['get_core_memories', 'Return the user\'s core memories.'],
-  ['get_user_preferences', 'Return the user\'s stored preferences.'],
-  ['forget_memory', 'Forget a memory by ID, with an ownership check.'],
-  ['strengthen_memory', 'Raise the importance of a memory, with an ownership check.'],
+  ['get_core_memories', 'Retrieve important memories for a user (importance of 7 or more).'],
+  ['get_user_preferences', 'Extract user preferences from memories.'],
+  ['forget_memory', 'Soft-delete a memory, with a reason.'],
+  ['strengthen_memory', 'Increase the importance of a memory (capped at 10).'],
 ];
 const more = [
   ['Persistent and cross-session memory', 'Facts are stored in PostgreSQL with pgvector and retrieved across separate chats.'],
@@ -53,7 +53,7 @@ const more = [
     </ul>
 
     <h2 class="h2" id="memory-types">Six memory types</h2>
-    <div class="tbl-wrap"><table class="tbl"><thead><tr><th>Type</th><th>Meaning and decay</th></tr></thead><tbody>
+    <div class="tbl-wrap"><table class="tbl"><thead><tr><th>Type</th><th>Behaviour</th></tr></thead><tbody>
       {types.map(([t, d]) => <tr><td><code>{t}</code></td><td>{d}</td></tr>)}
     </tbody></table></div>
 
