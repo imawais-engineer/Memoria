@@ -2,7 +2,7 @@
 // Originals are only read. Outputs are committed so Vercel needs no files outside website/.
 import sharp from 'sharp';
 import pngToIco from 'png-to-ico';
-import { mkdir, writeFile } from 'node:fs/promises';
+import { mkdir, writeFile, copyFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -58,4 +58,6 @@ const og = `<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" vi
 <text x="80" y="570" font-family="DejaVu Sans, Arial, sans-serif" font-size="30" fill="#48d597">Open source · Apache 2.0 · memoria.imawais.engineer</text>
 </svg>`;
 await sharp(Buffer.from(og)).png().toFile(path.join(pub, 'og-image.png'));
+await mkdir(path.join(root, 'src/data'), { recursive: true });
+await copyFile(path.join(repo, 'scripts/benchmark_results.json'), path.join(root, 'src/data/benchmark_results.json'));
 console.log('assets generated');
