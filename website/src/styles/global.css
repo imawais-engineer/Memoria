@@ -15,8 +15,10 @@
 
 html { background: var(--color-bg); color: var(--color-ink); scroll-padding-top: 5rem; }
 body { font-family: var(--font-sans); line-height: 1.65; -webkit-font-smoothing: antialiased; }
-a { color: var(--color-blue); text-underline-offset: 3px; }
-a:hover { color: var(--color-green); }
+@layer base {
+  a { color: var(--color-blue); text-decoration: underline; text-underline-offset: 3px; }
+  a:hover { color: var(--color-green); }
+}
 :focus-visible { outline: 3px solid var(--color-green); outline-offset: 3px; border-radius: 4px; }
 
 .grad-text { background: linear-gradient(135deg, #6c8cff, #48d597); -webkit-background-clip: text; background-clip: text; color: transparent; }
