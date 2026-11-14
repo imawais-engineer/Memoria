@@ -1,0 +1,50 @@
+---
+import Layout from '../layouts/Layout.astro';
+import PageHead from '../components/PageHead.astro';
+import Shot from '../components/Shot.astro';
+import { GITHUB_BLOB } from '../config';
+const steps = [
+  ['Ingest', 'After each chat turn, a Celery worker calls Qwen-Plus function calling (extract_memories) to pull out user-centric facts. Each fact gets a type: core, episodic, semantic, procedural, goal or preference.'],
+  ['Embed', 'Each memory is vectorized with text-embedding-v3 (1024 dimensions).'],
+  ['Store', 'The memory is saved in the PostgreSQL memories table with pgvector, next to its importance, decay rate and metadata.'],
+  ['Retrieve', 'retrieve_context embeds your message and ranks candidate memories by cosine similarity × importance × recency. It packs the best ones into the prompt under a token budget, core memories first. Personal Intelligence and MemoryLess change which memories are eligible.'],
+  ['Decay', 'Every day at 03:00 UTC, non-core memories lose importance exponentially. Memories that fall below 0.1 are archived (soft-deleted). Core memories have a decay rate of 0 and never decay.'],
+  ['Consolidate', 'Every week, memories from the past seven days are clustered by embedding similarity (0.75 or higher). Clusters of three or more are summarized by Qwen-Max into one semantic memory. Originals are linked through parent_id and marked is_consolidated.'],
+  ['Reflect', 'Reflection runs in the background on every 10th user message. Qwen produces a reflection and traits, stored as a memory and added to the system prompt.'],
+  ['Resolve conflicts', 'During ingestion, memories with similarity above 0.7 are checked by Qwen for contradictions. A contradicted memory is superseded, and the newer fact is kept.'],
+];
+const rates = [['core', '0'], ['semantic', '0.01'], ['episodic', '0.02'], ['procedural', '0.005'], ['goal', '0.01'], ['preference', '0.01']];
+---
+<Layout title="How Memoria Works: The Memory Lifecycle | Memoria" description="Follow a fact through Memoria: ingest, embed, store, retrieve, decay, consolidate, reflect and conflict resolution, with the architecture diagram." path="/how-it-works" breadcrumb="How it works">
+  <PageHead title="How Memoria works" lead="Chat stays fast because memory work happens in background workers. This page follows one fact from your message to long-term storage and back." />
+  <div class="wrap">
+    <ol class="mt-6 grid gap-4 md:grid-cols-2">
+      {steps.map(([t, d], i) => (
+        <li class="card"><h2 class="text-xl font-semibold"><span class="grad-text">{i + 1}.</span> {t}</h2><p class="mt-2 text-muted">{d}</p></li>
+      ))}
+    </ol>
+
+    <h2 class="h2">Retrieval score</h2>
+    <p class="mt-3 text-muted max-w-3xl">Each candidate memory is ordered by <code>cosine_similarity × importance × recency</code>. Recency is <code>exp(-decay_rate × age_in_days)</code>, so each memory ages at its own rate. The default decay rate depends on the memory type:</p>
+    <div class="tbl-wrap max-w-md"><table class="tbl"><thead><tr><th>Type</th><th>Default decay rate</th></tr></thead><tbody>
+      {rates.map(([t, r]) => <tr><td><code>{t}</code></td><td>{r}</td></tr>)}
+    </tbody></table></div>
+
+    <h2 class="h2">Memory tiers</h2>
+    <div class="tbl-wrap"><table class="tbl"><thead><tr><th>Tier</th><th>Where</th><th>Behaviour</th></tr></thead><tbody>
+      <tr><td>Session Memory</td><td>Redis</td><td>Last 10 messages of the active chat, always in context.</td></tr>
+      <tr><td>Personal Memory</td><td><code>memories</code> table</td><td>User facts with extraction, decay, consolidation and conflict resolution.</td></tr>
+      <tr><td>Personal Intelligence</td><td><code>users.global_memory_enabled</code></td><td>On: all Personal Memories. Off: current session plus manual core memories.</td></tr>
+      <tr><td>MemoryLess</td><td>Redis only</td><td>No Personal Memory read or write, no archive. Personal Intelligence is ignored.</td></tr>
+      <tr><td>Context Archive</td><td><code>chat_messages</code></td><td>Full transcripts. Searched on demand, not used in routine retrieval.</td></tr>
+    </tbody></table></div>
+
+    <h2 class="h2">Scheduled jobs</h2>
+    <p class="mt-3 text-muted max-w-3xl">Celery Beat triggers decay daily at 03:00 UTC and consolidation weekly on Saturday at 04:00 UTC. The schedule in <a href={`${GITHUB_BLOB}/backend/celery_app/__init__.py`} rel="noopener">backend/celery_app/__init__.py</a> is <code>crontab(day_of_week=6, hour=4, minute=0)</code>, which is Saturday in Celery. The README text says Sunday; this site follows the code.</p>
+
+    <h2 class="h2">Architecture diagram</h2>
+    <p class="mt-3 text-muted max-w-3xl">Layers: browser, FastAPI backend, Celery workers, Redis and PostgreSQL storage, and Qwen Cloud models. External agents reach memory through the MCP endpoint.</p>
+    <div class="mt-5"><Shot name="architecture" alt="Memoria architecture diagram with frontend, backend, Celery workers, storage and Qwen Cloud layers" /></div>
+    <p class="mt-4 text-muted">Full text version: <a href={`${GITHUB_BLOB}/docs/ARCHITECTURE.md`} rel="noopener">docs/ARCHITECTURE.md</a>.</p>
+  </div>
+</Layout>
