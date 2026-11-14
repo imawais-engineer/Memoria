@@ -14,7 +14,7 @@ const composite = (k: 'without' | 'with') => (avg(k, 'accuracy') + avg(k, 'safet
 const pct = (n: number) => `${n > 0 ? '+' : ''}${n}%`;
 const p = results.user_profile;
 ---
-<Layout title="Memoria Benchmark: 12 Scenarios, +77.6% With Memory | Memoria" description="How Memoria was benchmarked: 12 scenarios compared with and without stored memories on Qwen-Plus, scored for accuracy, safety and coherence." path="/benchmark" breadcrumb="Benchmark">
+<Layout title="Memoria Benchmark: 12 Scenarios, +77.6% Score | Memoria" description="How Memoria was benchmarked: 12 scenarios compared with and without stored memories on Qwen-Plus, scored for accuracy, safety and coherence." path="/benchmark" breadcrumb="Benchmark">
   <PageHead title="Memoria benchmark" lead="The same Qwen model answers 12 realistic requests twice, once with stored user memories and once without. Memory-augmented replies score 77.6% higher on average." />
   <div class="wrap">
     <h2 class="h2">Method</h2>
