@@ -3,8 +3,9 @@ export const SITE_NAME = 'Memoria';
 export const GITHUB_URL = 'https://github.com/imawais-engineer/Memoria';
 export const GITHUB_PROFILE_URL = 'https://github.com/imawais-engineer';
 export const GITHUB_BLOB = `${GITHUB_URL}/blob/main`;
-// Single place to change the "Live demo" target (the demo host is an open decision).
-export const DEMO_URL = 'https://memoria.imawais.engineer';
+// Hosted demo URL. Keep null while the hosted demo is offline; the site then shows
+// "Watch demo video" instead of "Live demo". Set to the new URL to bring the button back.
+export const DEMO_URL: string | null = null;
 export const VIDEO_URL = 'https://youtu.be/ANFAl6bwjjI';
 export const AUTHOR = 'Muhammad Awais';
 export const DEFAULT_DESCRIPTION =

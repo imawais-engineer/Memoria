@@ -1,7 +1,7 @@
 ---
 import Layout from '../layouts/Layout.astro';
 import PageHead from '../components/PageHead.astro';
-import { GITHUB_URL, GITHUB_PROFILE_URL, VIDEO_URL, AUTHOR, GITHUB_BLOB } from '../config';
+import { GITHUB_URL, GITHUB_PROFILE_URL, DEMO_URL, VIDEO_URL, AUTHOR, GITHUB_BLOB } from '../config';
 ---
 <Layout title="About Memoria and Its Author | Memoria" description="Memoria is an open-source MemoryAgent by Muhammad Awais, built for Track 1 of the Qwen Cloud hackathon and released under the Apache 2.0 license." path="/about" breadcrumb="About">
   <PageHead title="About Memoria" lead="Memoria is a personal AI with long-term memory, built on Qwen Cloud." />
@@ -12,7 +12,7 @@ import { GITHUB_URL, GITHUB_PROFILE_URL, VIDEO_URL, AUTHOR, GITHUB_BLOB } from '
       <h2>The track</h2>
       <p>Memoria was made for <strong class="text-ink">Track 1: MemoryAgent</strong>. The README describes it as a production-grade MemoryAgent that remembers, forgets, resolves conflicts and reflects on user knowledge, built on Qwen Cloud.</p>
       <h2>Stack</h2>
-      <p>FastAPI, PostgreSQL 16 with pgvector, Redis, Celery and Celery Beat, Qwen via DashScope, and a React (Vite) dashboard. The live demo runs on Azure, and the repository includes Terraform for Alibaba Cloud.</p>
+      <p>FastAPI, PostgreSQL 16 with pgvector, Redis, Celery and Celery Beat, Qwen via DashScope, and a React (Vite) dashboard. {DEMO_URL ? <>The <a href={DEMO_URL} rel="noopener">live demo</a> is hosted online, and the repository includes Terraform for Alibaba Cloud.</> : <>The hosted demo is currently offline, and the repository includes Terraform for Alibaba Cloud.</>}</p>
       <h2>License</h2>
       <p>Memoria is released under the <a href={`${GITHUB_URL}/blob/main/LICENSE`} rel="noopener">Apache License 2.0</a>.</p>
       <h2>Links</h2>

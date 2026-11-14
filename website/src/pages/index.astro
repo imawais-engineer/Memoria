@@ -1,7 +1,7 @@
 ---
 import Layout from '../layouts/Layout.astro';
 import Shot from '../components/Shot.astro';
-import { SITE_URL, GITHUB_URL, DEMO_URL, AUTHOR, GITHUB_PROFILE_URL, DEFAULT_DESCRIPTION } from '../config';
+import { SITE_URL, GITHUB_URL, DEMO_URL, VIDEO_URL, AUTHOR, GITHUB_PROFILE_URL, DEFAULT_DESCRIPTION } from '../config';
 
 const features = [
   ['Persistent memory', 'Facts from conversations are embedded with text-embedding-v3 (1024 dimensions) and stored in PostgreSQL with pgvector. Six memory types: core, episodic, semantic, procedural, goal, preference.'],
@@ -45,7 +45,9 @@ const jsonLd = [
     <div class="mt-8 flex flex-wrap gap-3">
       <a class="btn btn-primary" href="/get-started">Get started</a>
       <a class="btn" href={GITHUB_URL} rel="noopener">View on GitHub</a>
-      <a class="btn" href={DEMO_URL} rel="noopener">Live demo</a>
+      {DEMO_URL
+        ? <a class="btn" href={DEMO_URL} rel="noopener">Live demo</a>
+        : <a class="btn" href={VIDEO_URL} rel="noopener">Watch demo video</a>}
     </div>
     <ul class="mt-8 flex flex-wrap gap-2 text-sm" aria-label="Built with">
       {stack.map((s) => <li class="px-3 py-1 rounded-full border border-line bg-panel text-muted">{s}</li>)}
