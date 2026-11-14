@@ -1,0 +1,61 @@
+---
+import Layout from '../layouts/Layout.astro';
+import PageHead from '../components/PageHead.astro';
+import { GITHUB_BLOB, GITHUB_URL } from '../config';
+const gh = (p: string) => `${GITHUB_BLOB}/${p}`;
+const api = [
+  ['POST', '/auth/signup', 'Create a user'],
+  ['POST', '/auth/login', 'Log in with username and favorite book'],
+  ['GET, PATCH', '/auth/preferences', 'Read or update user preferences'],
+  ['POST', '/chat', 'Chat turn'],
+  ['POST', '/chat/stream', 'Chat turn streamed over SSE'],
+  ['POST, GET', '/sessions', 'Create or list chat sessions'],
+  ['GET', '/sessions/{session_id}/history', 'Session messages'],
+  ['PATCH, DELETE', '/sessions/{session_id}', 'Update or delete a session'],
+  ['GET', '/api/memories', 'List memories'],
+  ['DELETE', '/api/memories/{memory_id}', 'Forget a memory'],
+  ['GET', '/api/memory-stats', 'Memory statistics'],
+  ['POST', '/api/memorize', 'Store a memory manually'],
+  ['POST', '/api/feedback', 'Thumbs up or down on a reply'],
+  ['GET', '/api/search-archive', 'Search the context archive'],
+  ['GET', '/api/models', 'List chat models'],
+  ['POST', '/api/generate/image, /video, /voice', 'Media generation'],
+  ['GET', '/api/generate/assets', 'List generated assets'],
+  ['DELETE', '/api/generate/assets/{asset_id}', 'Delete an asset'],
+  ['POST, GET', '/api/tasks', 'Create or list tasks'],
+  ['PATCH, DELETE', '/api/tasks/{task_id}', 'Update or delete a task'],
+  ['POST', '/api/contact-feedback', 'Send feedback'],
+  ['GET', '/mcp/memory-skills', 'MCP memory skill catalog'],
+  ['GET', '/health', 'Health check'],
+];
+---
+<Layout title="Memoria Docs: Architecture, API, MCP, Deployment and Security | Memoria" description="Index of Memoria documentation: architecture, API endpoints, MCP skills, deployment with Terraform, security policy and troubleshooting." path="/docs" breadcrumb="Docs">
+  <PageHead title="Memoria documentation" lead="The detailed docs live in the GitHub repository. This page links to them and lists the API endpoints." />
+  <div class="wrap">
+    <ul class="mt-6 grid gap-4 sm:grid-cols-2">
+      <li class="card"><h2 class="text-lg font-semibold">Architecture</h2><p class="text-sm text-muted mt-2">Diagram, data flows, memory tiers and components.</p><p class="mt-2"><a href={gh('docs/ARCHITECTURE.md')} rel="noopener">docs/ARCHITECTURE.md</a> · <a href="/how-it-works">Summary on this site</a></p></li>
+      <li class="card"><h2 class="text-lg font-semibold">MCP skills</h2><p class="text-sm text-muted mt-2">Four memory tools at GET /mcp/memory-skills.</p><p class="mt-2"><a href={gh('backend/app/mcp/memory_skill.py')} rel="noopener">backend/app/mcp/memory_skill.py</a></p></li>
+      <li class="card"><h2 class="text-lg font-semibold">Deployment</h2><p class="text-sm text-muted mt-2">Terraform for Alibaba Cloud ECS, ApsaraDB PostgreSQL and Redis. The README also documents safe updates.</p><p class="mt-2"><a href={gh('infrastructure/acs_deployment.tf')} rel="noopener">infrastructure/acs_deployment.tf</a> · <a href={gh('backend/Dockerfile')} rel="noopener">backend/Dockerfile</a> · <a href={gh('docker-compose.yml')} rel="noopener">docker-compose.yml</a></p></li>
+      <li class="card"><h2 class="text-lg font-semibold">Security</h2><p class="text-sm text-muted mt-2">Report vulnerabilities privately. Secrets are scanned with gitleaks.</p><p class="mt-2"><a href={gh('SECURITY.md')} rel="noopener">SECURITY.md</a></p></li>
+      <li class="card"><h2 class="text-lg font-semibold">Configuration</h2><p class="text-sm text-muted mt-2">Supported environment variables.</p><p class="mt-2"><a href={gh('.env.example')} rel="noopener">.env.example</a> · <a href="/get-started">Setup guide</a></p></li>
+      <li class="card"><h2 class="text-lg font-semibold">More</h2><p class="text-sm text-muted mt-2">Roadmap and project narrative.</p><p class="mt-2"><a href={gh('docs/MEMORIA_DEVELOPMENT_ROADMAP.md')} rel="noopener">Roadmap</a> · <a href={gh('BLOG_POST.md')} rel="noopener">Blog post</a> · <a href={gh('README.md')} rel="noopener">README</a></p></li>
+    </ul>
+
+    <h2 class="h2" id="api">API endpoints</h2>
+    <p class="mt-3 text-muted max-w-3xl">Routes defined in <a href={gh('backend/app/api')} rel="noopener">backend/app/api</a>. With the stack running, interactive docs are at <code>http://localhost:8000/docs</code>.</p>
+    <div class="tbl-wrap"><table class="tbl"><thead><tr><th>Method</th><th>Path</th><th>Purpose</th></tr></thead><tbody>
+      {api.map(([m, p, d]) => <tr><td>{m}</td><td><code>{p}</code></td><td>{d}</td></tr>)}
+    </tbody></table></div>
+
+    <h2 class="h2" id="troubleshooting">Troubleshooting</h2>
+    <ul class="mt-4 space-y-3 text-muted max-w-3xl list-disc pl-5">
+      <li><strong class="text-ink">Check the backend is up.</strong> Open <code>http://localhost:8000/health</code>.</li>
+      <li><strong class="text-ink">Tables are missing or the app reports schema errors.</strong> Apply migrations: <code>docker compose exec backend alembic upgrade head</code>.</li>
+      <li><strong class="text-ink">Qwen calls fail with an international-region key.</strong> Set <code>DASHSCOPE_BASE_URL</code> to <code>https://dashscope-intl.aliyuncs.com/api/v1</code>. Leave it blank for the SDK default (Beijing).</li>
+      <li><strong class="text-ink">Using the alias key name.</strong> The backend also accepts <code>QWEN_DASHSCOPE_API</code> if <code>DASHSCOPE_API_KEY</code> is unset.</li>
+      <li><strong class="text-ink">HTTP 429 from chat or media.</strong> You reached a per-user quota: 20 messages, 5 images, 5 videos or 5 voice generations.</li>
+      <li><strong class="text-ink">Lost data after an update.</strong> Never run <code>docker compose down -v</code>. It deletes the <code>pgdata</code> volume. Update with <code>docker compose down &amp;&amp; docker compose up -d --build</code>.</li>
+    </ul>
+    <p class="mt-6 text-muted">Anything else: <a href={`${GITHUB_URL}/issues`} rel="noopener">open an issue on GitHub</a>.</p>
+  </div>
+</Layout>
