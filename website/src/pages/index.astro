@@ -1,0 +1,110 @@
+---
+import Layout from '../layouts/Layout.astro';
+import Shot from '../components/Shot.astro';
+import { SITE_URL, GITHUB_URL, DEMO_URL, AUTHOR, GITHUB_PROFILE_URL, DEFAULT_DESCRIPTION } from '../config';
+
+const features = [
+  ['Persistent memory', 'Facts from conversations are embedded with text-embedding-v3 (1024 dimensions) and stored in PostgreSQL with pgvector. Six memory types: core, episodic, semantic, procedural, goal, preference.'],
+  ['Cross-session recall', 'Retrieval ranks memories by vector similarity × importance × recency, so the agent can use what you said in earlier, separate chats.'],
+  ['Personal Intelligence and MemoryLess', 'Turn global memory access on or off. MemoryLess incognito chats never read or write long-term memory.'],
+  ['Forgetting and consolidation', 'Daily exponential decay archives stale memories. A weekly Qwen-Max job merges related facts into short summaries.'],
+  ['Conflict detection', 'A new fact that contradicts a stored one is flagged and supersedes it during ingestion.'],
+  ['Reflection', 'Qwen periodically reflects on stored memories and adds higher-level patterns about you to the system prompt.'],
+  ['Slash commands and streaming chat', 'Type / for nine commands. Replies stream token by token over SSE with Markdown and KaTeX.'],
+  ['MCP memory skills', 'Four memory tools are published at GET /mcp/memory-skills so external agents can read and curate memory.'],
+];
+const stack = ['FastAPI', 'PostgreSQL + pgvector', 'Redis', 'Celery', 'Qwen Cloud (DashScope)', 'React'];
+
+const jsonLd = [
+  { '@context': 'https://schema.org', '@type': 'WebSite', name: 'Memoria', alternateName: ['Memoria AI', 'Memoria MemoryAgent'], url: SITE_URL },
+  {
+    '@context': 'https://schema.org', '@type': 'SoftwareApplication', name: 'Memoria',
+    description: DEFAULT_DESCRIPTION,
+    license: 'https://www.apache.org/licenses/LICENSE-2.0',
+    codeRepository: GITHUB_URL, applicationCategory: 'DeveloperApplication',
+    operatingSystem: 'Linux, macOS, Windows (Docker)', url: SITE_URL,
+    author: { '@type': 'Person', name: AUTHOR, url: GITHUB_PROFILE_URL },
+  },
+  { '@context': 'https://schema.org', '@type': 'Person', name: AUTHOR, url: GITHUB_PROFILE_URL, sameAs: [GITHUB_PROFILE_URL] },
+];
+---
+<Layout
+  title="Memoria – Self-Evolving Personal AI with Human-like Memory"
+  description="Memoria is an open-source personal AI that remembers, forgets, resolves conflicts and reflects. Clone it from GitHub and run it with Docker Compose."
+  path="/"
+  jsonLd={jsonLd}
+>
+  <section class="wrap pt-14 pb-10">
+    <p class="text-green font-semibold">Track 1 · MemoryAgent · Apache 2.0</p>
+    <h1 class="mt-3 text-4xl sm:text-6xl font-extrabold leading-[1.1] max-w-4xl">
+      <span class="grad-text">Memoria</span>, a personal AI that remembers, forgets and reflects
+    </h1>
+    <p class="mt-5 text-lg text-muted max-w-2xl">
+      Memoria keeps long-term memory of what you tell it. It ranks that memory when you chat, lets stale facts fade, merges related ones, and flags facts that contradict each other.
+    </p>
+    <div class="mt-8 flex flex-wrap gap-3">
+      <a class="btn btn-primary" href="/get-started">Get started</a>
+      <a class="btn" href={GITHUB_URL} rel="noopener">View on GitHub</a>
+      <a class="btn" href={DEMO_URL} rel="noopener">Live demo</a>
+    </div>
+    <ul class="mt-8 flex flex-wrap gap-2 text-sm" aria-label="Built with">
+      {stack.map((s) => <li class="px-3 py-1 rounded-full border border-line bg-panel text-muted">{s}</li>)}
+    </ul>
+  </section>
+
+  <section class="wrap pb-6">
+    <Shot name="dashboard" eager alt="Memoria dashboard showing the chat view with memory sidebar" />
+  </section>
+
+  <section class="wrap" aria-labelledby="feat">
+    <h2 id="feat" class="h2">What it does</h2>
+    <ul class="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      {features.map(([t, d]) => (
+        <li class="card"><h3 class="font-semibold text-ink">{t}</h3><p class="mt-2 text-sm text-muted">{d}</p></li>
+      ))}
+    </ul>
+    <p class="mt-5"><a href="/features">See every feature</a></p>
+  </section>
+
+  <section class="wrap" aria-labelledby="arch">
+    <h2 id="arch" class="h2">How the pieces fit</h2>
+    <ol class="mt-6 grid gap-3 md:grid-cols-4">
+      <li class="card"><p class="font-semibold">1. Chat</p><p class="text-sm text-muted mt-1">FastAPI loads the Redis session, retrieves memories from pgvector, and asks Qwen for a reply.</p></li>
+      <li class="card"><p class="font-semibold">2. Ingest</p><p class="text-sm text-muted mt-1">A Celery worker extracts facts, embeds them and stores them with conflict checks.</p></li>
+      <li class="card"><p class="font-semibold">3. Maintain</p><p class="text-sm text-muted mt-1">Celery Beat runs daily decay and weekly consolidation.</p></li>
+      <li class="card"><p class="font-semibold">4. Reflect</p><p class="text-sm text-muted mt-1">Reflection runs in the background on every 10th user message.</p></li>
+    </ol>
+    <p class="mt-5"><a href="/how-it-works">Read the memory lifecycle</a></p>
+  </section>
+
+  <section class="wrap" aria-labelledby="bench">
+    <h2 id="bench" class="h2">Benchmark result</h2>
+    <div class="mt-6 grid gap-6 md:grid-cols-3">
+      <div class="card"><p class="text-4xl font-extrabold grad-text">+77.6%</p><p class="text-sm text-muted mt-2">average improvement across 12 scenarios</p></div>
+      <div class="card"><p class="text-4xl font-extrabold grad-text">0.58 → 0.90</p><p class="text-sm text-muted mt-2">average accuracy without and with memory</p></div>
+      <div class="card"><p class="text-4xl font-extrabold grad-text">0.64 → 0.92</p><p class="text-sm text-muted mt-2">average composite of accuracy, safety and coherence</p></div>
+    </div>
+    <p class="mt-5 text-muted">Two scenarios scored slightly lower with memory (-3.7%) and three were unchanged. <a href="/benchmark">See method and all 12 results</a>.</p>
+  </section>
+
+  <section class="wrap" aria-labelledby="shots">
+    <h2 id="shots" class="h2">Screenshots</h2>
+    <div class="mt-6 grid gap-4 sm:grid-cols-2">
+      <figure><Shot name="commands" alt="Chat showing the slash command help table" /><figcaption class="text-sm text-muted mt-2">Type / in chat for the command table.</figcaption></figure>
+      <figure><Shot name="about-01" alt="Memoria About page, first section" /><figcaption class="text-sm text-muted mt-2">The in-app About page.</figcaption></figure>
+      <figure><Shot name="about-02" alt="Memoria About page, second section" /><figcaption class="text-sm text-muted mt-2">About page, continued.</figcaption></figure>
+      <figure><Shot name="about-03" alt="Memoria About page, third section" /><figcaption class="text-sm text-muted mt-2">About page, continued.</figcaption></figure>
+    </div>
+  </section>
+
+  <section class="wrap" aria-labelledby="cta">
+    <div class="card mt-14 text-center py-10">
+      <h2 id="cta" class="text-3xl font-bold">Run it yourself</h2>
+      <p class="text-muted mt-3">Clone the repo, add a DashScope API key, and start the stack with Docker Compose.</p>
+      <div class="mt-6 flex flex-wrap justify-center gap-3">
+        <a class="btn btn-primary" href="/get-started">Follow the setup guide</a>
+        <a class="btn" href={GITHUB_URL} rel="noopener">Star on GitHub</a>
+      </div>
+    </div>
+  </section>
+</Layout>
