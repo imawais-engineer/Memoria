@@ -1,0 +1,8 @@
+---
+interface Props { title: string; lead: string; }
+const { title, lead } = Astro.props;
+---
+<section class="wrap pt-12 pb-4">
+  <h1 class="text-4xl sm:text-5xl font-extrabold leading-tight">{title}</h1>
+  <p class="mt-4 text-lg text-muted max-w-3xl">{lead}</p>
+</section>
