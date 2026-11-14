@@ -126,3 +126,35 @@ test('every get-started command appears verbatim in README.md', async () => {
   }
   assert.ok(checked >= 12, `checked ${checked}`);
 });
+
+test('page titles are at most 60 characters except the exact home title', () => {
+  for (const [f, h] of Object.entries(pages)) {
+    if (f === 'index.html') continue;
+    const title = decode(h.match(/<title>([^<]+)<\/title>/)[1]);
+    assert.ok(title.length <= 60, `${f}: title is ${title.length} chars`);
+    assert.ok(title.includes('Memoria'), `${f}: title has Memoria`);
+  }
+});
+
+test('home shows the demo video link while DEMO_URL is null, and no live demo claims', async () => {
+  const cfg = await readFile(path.join(root, 'src/config.ts'), 'utf8');
+  const demoNull = /DEMO_URL: string \| null = null;/.test(cfg);
+  const home = pages['index.html'];
+  const about = pages['about.html'];
+  if (demoNull) {
+    assert.ok(/<a [^>]*href="https:\/\/youtu\.be\/ANFAl6bwjjI"[^>]*>Watch demo video<\/a>/.test(home));
+    assert.ok(!home.includes('Live demo'));
+    assert.ok(about.includes('hosted demo is currently offline'));
+  } else {
+    assert.ok(home.includes('Live demo'));
+  }
+  for (const [f, h] of Object.entries(pages)) {
+    if (demoNull) assert.ok(!/live demo/i.test(h), `${f}: live demo claim`);
+  }
+});
+
+test('website benchmark data equals scripts/benchmark_results.json', async () => {
+  const a = JSON.parse(await readFile(path.join(root, 'src/data/benchmark_results.json'), 'utf8'));
+  const b = JSON.parse(await readFile(path.join(repo, 'scripts/benchmark_results.json'), 'utf8'));
+  assert.deepEqual(a, b);
+});
