@@ -83,6 +83,17 @@ backend lives under `backend/`:
   (e.g. `https://dashscope-intl.aliyuncs.com/api/v1`).
 - Chat model: `qwen-plus` (not `qwen3-plus`). Embeddings: `text-embedding-v3` (1024 dims).
 
+### Health, metrics and deployment
+
+- `GET /health` is liveness; `GET /health/ready` checks Postgres and Redis
+  (503 on failure); `GET /metrics` is Prometheus text (`app/core/observability.py`).
+  Tests in `backend/tests/test_health_metrics.py` monkeypatch the checks, so no
+  services are needed.
+- Outside `ENVIRONMENT=dev` the app needs a random `SECRET_KEY` of 32+ chars.
+- Compose and Terraform pass `LLM_*`, `SECRET_KEY`, `ENVIRONMENT` through from the
+  environment; never put real values in files. See `docs/DEPLOYMENT.md`. The
+  Terraform and Compose files have not been executed in this repo's CI.
+
 ### Hackathon submission assets
 
 - Architecture diagram: `Submission Files/architecture.html`

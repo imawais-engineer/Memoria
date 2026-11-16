@@ -26,8 +26,18 @@ You will work inside a single project folder (e.g., `memoria/`) and paste the pr
 | 6. Core chat agent API | Implemented | `backend/app/api/chat.py`, `backend/app/services/agent_service.py` |
 | 7. Session management | Implemented | `backend/app/api/sessions.py`; session logic lives in `agent_service.py`, not a separate `session_manager.py` |
 | 8. Dashboard (frontend) | Implemented | `frontend/` |
-| 9. Deployment | Implemented | `backend/Dockerfile`, `docker-compose.yml`, `infrastructure/` |
+| 9. Deployment | Implemented as configuration; **not executed** (no cloud apply, no image build, Terraform not validated) | `backend/Dockerfile`, `docker-compose.yml`, `infrastructure/`, [DEPLOYMENT.md](DEPLOYMENT.md) |
 | 10. Testing, benchmarking, docs | Implemented | `backend/tests/` (unit + DB-backed), `.github/workflows/backend-tests.yml`, `scripts/benchmark.py`, `docs/` |
+
+### Provider-agnostic and hardening phases
+
+| Phase | Status | Where |
+|---|---|---|
+| 1. Hardening (JWT auth, per-user isolation, rate limits, daily token caps, alembic fixes) | Implemented | `backend/app/core/auth.py`, `backend/app/core/security.py`, `backend/app/config.py` |
+| 2. OpenAI-compatible provider layer | Implemented | `backend/app/core/llm/`, [LLM_PROVIDERS.md](LLM_PROVIDERS.md), [EMBEDDINGS.md](EMBEDDINGS.md) |
+| 3. Memory quality (kinds, supersede, explanations, benchmark) | Implemented | `backend/app/memory/`, [MEMORY_QUALITY.md](MEMORY_QUALITY.md), `scripts/benchmark.py` |
+| 4. MCP memory server (remember/recall/forget) | Implemented | `backend/app/mcp/`, [MCP.md](MCP.md) |
+| 5. Ship readiness (readiness probe, metrics, compose/Terraform config, deployment and backup docs) | Implemented in code and docs; the deployment itself is **not executed** | `backend/app/core/observability.py`, `docker-compose.yml`, `infrastructure/`, [DEPLOYMENT.md](DEPLOYMENT.md) |
 
 ## Table of Contents
 

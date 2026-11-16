@@ -4,35 +4,53 @@
 # Usage:
 #   docker compose up --build -d
 #   docker compose run --rm backend alembic upgrade head
+#
+# Secrets come from the shell or a root .env file, never from this file.
+# For anything but local dev set ENVIRONMENT=production and a SECRET_KEY of at
+# least 32 random characters (the backend refuses to start otherwise), and
+# override POSTGRES_PASSWORD. See docs/DEPLOYMENT.md.
 
 x-backend-env: &backend-env
-  DATABASE_URL: postgresql+asyncpg://user:pass@db:5432/memoria
+  DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-user}:${POSTGRES_PASSWORD:-pass}@db:5432/memoria
   REDIS_URL: redis://redis:6379/0
+  ENVIRONMENT: ${ENVIRONMENT:-dev}
+  SECRET_KEY: ${SECRET_KEY:-change-me-in-production}
   DASHSCOPE_API_KEY: ${DASHSCOPE_API_KEY:-}
   DASHSCOPE_BASE_URL: ${DASHSCOPE_BASE_URL:-}
+  LLM_PROVIDER: ${LLM_PROVIDER:-}
+  LLM_BASE_URL: ${LLM_BASE_URL:-}
+  LLM_API_KEY: ${LLM_API_KEY:-}
+  LLM_CHAT_MODEL: ${LLM_CHAT_MODEL:-}
+  LLM_FAST_MODEL: ${LLM_FAST_MODEL:-}
+  LLM_EMBEDDING_MODEL: ${LLM_EMBEDDING_MODEL:-}
+  LLM_CHAT_MODELS: ${LLM_CHAT_MODELS:-}
+  LLM_EMBEDDING_SEND_DIMENSIONS: ${LLM_EMBEDDING_SEND_DIMENSIONS:-false}
+  EMBEDDING_DIM: ${EMBEDDING_DIM:-1024}
 
 services:
   db:
     image: pgvector/pgvector:pg16
+    restart: unless-stopped
     environment:
-      POSTGRES_USER: user
-      POSTGRES_PASSWORD: pass
+      POSTGRES_USER: ${POSTGRES_USER:-user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-pass}
       POSTGRES_DB: memoria
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U user -d memoria"]
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d memoria"]
       interval: 5s
       timeout: 5s
       retries: 10
 
   redis:
     image: redis:7-alpine
-    command: redis-server --save 60 1 --loglevel warning
+    restart: unless-stopped
+    command: redis-server --save 60 1 --appendonly yes --loglevel warning
     ports:
-      - "6379:6379"
+      - "127.0.0.1:6379:6379"
     volumes:
       - redisdata:/data
     healthcheck:
@@ -43,6 +61,7 @@ services:
 
   backend:
     build: ./backend
+    restart: unless-stopped
     environment: *backend-env
     ports:
       - "8000:8000"
@@ -52,7 +71,8 @@ services:
       redis:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health', timeout=3)"]
+      # Readiness (DB + Redis), not just liveness.
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health/ready', timeout=3)"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -60,6 +80,7 @@ services:
 
   worker:
     build: ./backend
+    restart: unless-stopped
     command: celery -A celery_app worker --loglevel=info
     environment: *backend-env
     depends_on:
@@ -67,9 +88,16 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "celery -A celery_app inspect ping -d celery@$$HOSTNAME --timeout 5 || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
 
   beat:
     build: ./backend
+    restart: unless-stopped
     command: celery -A celery_app beat --loglevel=info
     environment: *backend-env
     depends_on:

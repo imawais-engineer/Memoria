@@ -214,6 +214,11 @@ up -d` **without** `-v`. **Never run `docker compose down -v`** — it deletes
 volumes and wipes all memories, chats, and generated media. After restart, run
 `alembic upgrade head` to apply migrations without losing data.
 
+The API exposes `/health` (liveness), `/health/ready` (Postgres + Redis, 503 on
+failure) and `/metrics` (Prometheus text). Monitoring, alerts, backup/restore
+and secret handling are in [DEPLOYMENT.md](DEPLOYMENT.md). The Terraform and
+Compose configuration has not been executed.
+
 ## Testing and CI
 
 Unit tests for decay math, the Celery schedule, retrieval packing, ingestion
@@ -225,8 +230,7 @@ endpoints share the `require_token` guard in `app/core/security.py`.
 
 ## Known limitations
 
-- **Client-supplied `user_id`.** Chat and session endpoints trust the `user_id`
-  sent by the client. There is no per-user session token, so a caller who knows
-  another user's id can act as that user. Issuing signed JWTs at login and
-  deriving the user from the token is recommended future work; it is not
-  implemented.
+- **Single-node deployment.** The IaC provisions one ECS instance with no
+  autoscaling, and it has not been executed. Metrics are per process. See
+  [DEPLOYMENT.md](DEPLOYMENT.md).
+- **Open CORS.** `app/main.py` allows all origins; restrict before a public launch.

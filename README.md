@@ -145,7 +145,14 @@ ApsaraDB PostgreSQL (pgvector), and ApsaraDB Redis. The ECS host runs the backen
 via Docker Compose; **database state lives in ApsaraDB**, not on the container
 filesystem.
 
-When updating the app on ECS:
+The ECS host runs the backend, worker and beat as plain Docker containers
+started from `user_data` (not Compose); secrets are written to a root-only env
+file. Set `admin_cidr` and pass keys via `TF_VAR_*`. See
+[docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) for monitoring (`/health/ready`,
+`/metrics`), backups and switching the LLM provider. **The Terraform has not
+been applied or validated by the authors.**
+
+When updating a Compose stack:
 
 ```bash
 docker compose down && docker compose up -d --build
@@ -232,6 +239,7 @@ docs/             Architecture, roadmap, upgrade notes
 ## Further reading
 
 - **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)** — system diagram and data flows
+- **[docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)** — monitoring, backups, secrets, switching LLM provider
 - **[Submission Files/architecture.html](Submission%20Files/architecture.html)** — hackathon submission architecture (open in browser)
 - **[BLOG_POST.md](BLOG_POST.md)** — short project narrative for Medium/dev.to
 - **[docs/MEMORIA_DEVELOPMENT_ROADMAP.md](docs/MEMORIA_DEVELOPMENT_ROADMAP.md)** — module‑by‑module build plan
