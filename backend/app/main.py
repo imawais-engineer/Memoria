@@ -28,6 +28,7 @@ from app.config import Settings, get_settings, validate_runtime_settings
 from app.core.database import engine, get_db  # noqa: F401  (exposed for later routes)
 from app.core.llm.dimcheck import check_embedding_dim
 from app.mcp.memory_skill import MEMORY_TOOL_CATALOG
+from app.mcp.server import mount_mcp
 
 
 class HealthResponse(BaseModel):
@@ -45,9 +46,10 @@ def create_app() -> FastAPI:
     validate_runtime_settings(settings)
 
     @asynccontextmanager
-    async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
+    async def lifespan(app_: FastAPI) -> AsyncIterator[None]:
         await check_embedding_dim(engine, settings.embedding_dim)
-        yield
+        async with app_.state.mcp_server.session_manager.run():
+            yield
 
     application = FastAPI(
         lifespan=lifespan,
@@ -97,6 +99,7 @@ def create_app() -> FastAPI:
     application.include_router(archive_router)
     application.include_router(sessions_router)
     application.include_router(tasks_router)
+    mount_mcp(application)
 
     return application
 

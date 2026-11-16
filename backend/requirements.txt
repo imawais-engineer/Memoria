@@ -16,3 +16,4 @@ httpx
 tiktoken  # token counting for retrieval context packing
 greenlet  # required by sqlalchemy.ext.asyncio
 PyJWT
+mcp>=1.9,<2  # MCP server (app/mcp/server.py)
