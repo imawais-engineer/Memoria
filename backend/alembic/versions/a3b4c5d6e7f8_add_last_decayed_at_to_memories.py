@@ -24,6 +24,9 @@ def upgrade() -> None:
         "memories",
         sa.Column("last_decayed_at", sa.DateTime(timezone=True), nullable=True),
     )
+    # Rows were already decayed under the old compounding formula; stamp them
+    # so the first run does not decay from created_at a second time.
+    op.execute("UPDATE memories SET last_decayed_at = NOW()")
 
 
 def downgrade() -> None:

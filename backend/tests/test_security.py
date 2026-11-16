@@ -42,3 +42,21 @@ def test_require_token_rejects_bad_token(bad):
     with pytest.raises(HTTPException) as exc:
         require_token(x_api_token=bad)
     assert exc.value.status_code == 401
+
+
+def test_legacy_plaintext_is_normalized_like_hashed():
+    assert verify_secret("  DUNE ", "dune")
+
+
+def test_check_login_secret_unknown_user_runs_scrypt(monkeypatch):
+    from app.core import security
+
+    calls = []
+    real = security.verify_secret
+    monkeypatch.setattr(
+        security, "verify_secret", lambda s, h: calls.append(h) or real(s, h)
+    )
+    assert security.check_login_secret("x", None) is False
+    assert calls == [security._DUMMY_HASH]
+    assert security.check_login_secret("Blue", hash_secret("blue")) is True
+    assert security.check_login_secret("red", hash_secret("blue")) is False

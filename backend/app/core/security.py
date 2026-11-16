@@ -45,7 +45,9 @@ def verify_secret(secret: str, stored: str) -> bool:
     """Verify ``secret`` against a hash, or a legacy plaintext value."""
 
     if not is_hashed(stored):
-        return hmac.compare_digest(secret.encode("utf-8"), stored.encode("utf-8"))
+        # Legacy plaintext: same normalization as hashed rows, so login
+        # semantics do not change when a row is upgraded.
+        return hmac.compare_digest(_normalize(secret), _normalize(stored))
     try:
         _, salt_hex, hash_hex = stored.split("$", 2)
         expected = bytes.fromhex(hash_hex)
@@ -53,6 +55,20 @@ def verify_secret(secret: str, stored: str) -> bool:
     except ValueError:
         return False
     return hmac.compare_digest(actual, expected)
+
+
+# Verified against when the user does not exist, so unknown and known
+# usernames cost the same scrypt derivation.
+_DUMMY_HASH = hash_secret("dummy-secret-for-timing")
+
+
+def check_login_secret(secret: str, stored: str | None) -> bool:
+    """Verify a login secret; runs scrypt even when ``stored`` is None."""
+
+    if stored is None:
+        verify_secret(secret, _DUMMY_HASH)
+        return False
+    return verify_secret(secret, stored)
 
 
 def require_token(x_api_token: str = Header(default="")) -> None:
