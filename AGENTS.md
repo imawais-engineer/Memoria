@@ -22,13 +22,24 @@ backend lives under `backend/`:
 ### Running the backend (dev)
 
 - The update script installs `backend/requirements.txt`. If running by hand,
-  create a venv and `pip install -r backend/requirements.txt` (needs the
+  create a venv and `pip install -r backend/requirements-dev.txt` (runtime
+  deps plus pytest; use `scripts/requirements.txt` for the benchmark; needs the
   `python3.12-venv` system package for `python3 -m venv`).
 - Start the dev server **from the `backend/` directory** so the `app` package
   imports resolve: `uvicorn app.main:app --reload --port 8000`.
 - Verify: `curl localhost:8000/health` returns `200` with
   `{"status":"ok","service":"memoria","version":"0.1.0"}`. Swagger UI at `/docs`.
 - Full functionality requires `DASHSCOPE_API_KEY`, Postgres (pgvector), and Redis.
+
+### Tests
+
+- Run from `backend/`: `../.venv/bin/pytest -q -rs` (or `pytest -q -rs` in an activated venv).
+- DB-less unit tests (`test_security.py`, `test_forgetting_math.py`, `test_celery_schedule.py`,
+  `test_retrieval_packing.py`, `test_ingestion_parsing.py`, `test_consolidation_clustering.py`)
+  mock DashScope/Redis and run anywhere.
+- DB-backed API tests use the `db_session_factory` fixture and need Postgres with pgvector at
+  `TEST_DATABASE_URL`; they are skipped automatically when it is unreachable.
+- CI: `.github/workflows/backend-tests.yml` runs everything with pgvector + Redis services.
 
 ### Frontend (`frontend/`, dashboard + landing)
 

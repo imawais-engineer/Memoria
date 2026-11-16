@@ -48,6 +48,41 @@ def _format_memory(memory: Memory) -> str:
     return f"[{memory.type} | {created}] {memory.content}"
 
 
+def _pack_memories(
+    candidates: list[Memory], max_tokens: int
+) -> tuple[list[str], list[Memory], int]:
+    """Greedily pack memories under ``max_tokens``, core memories first.
+
+    Core memories are always included (even past the budget); other memories
+    are added in order until the next one would exceed the budget.
+    Returns ``(entries, memories, used_tokens)``.
+    """
+
+    core = [m for m in candidates if m.type == "core"]
+    non_core = [m for m in candidates if m.type != "core"]
+
+    entries: list[str] = []
+    memories: list[Memory] = []
+    used_tokens = 0
+
+    for memory in core:
+        entry = _format_memory(memory)
+        entries.append(entry)
+        memories.append(memory)
+        used_tokens += count_tokens(entry)
+
+    for memory in non_core:
+        entry = _format_memory(memory)
+        entry_tokens = count_tokens(entry)
+        if used_tokens + entry_tokens > max_tokens:
+            break
+        entries.append(entry)
+        memories.append(memory)
+        used_tokens += entry_tokens
+
+    return entries, memories, used_tokens
+
+
 async def retrieve_context_and_ids(
     user_id: str,
     query_text: str,
@@ -116,27 +151,9 @@ async def retrieve_context_and_ids(
     if not candidates:
         return "", []
 
-    core = [m for m in candidates if m.type == "core"]
-    non_core = [m for m in candidates if m.type != "core"]
-
-    packed_entries: list[str] = []
-    packed_memories: list[Memory] = []
-    used_tokens = 0
-
-    for memory in core:
-        entry = _format_memory(memory)
-        packed_entries.append(entry)
-        packed_memories.append(memory)
-        used_tokens += count_tokens(entry)
-
-    for memory in non_core:
-        entry = _format_memory(memory)
-        entry_tokens = count_tokens(entry)
-        if used_tokens + entry_tokens > max_tokens:
-            break
-        packed_entries.append(entry)
-        packed_memories.append(memory)
-        used_tokens += entry_tokens
+    packed_entries, packed_memories, used_tokens = _pack_memories(
+        candidates, max_tokens
+    )
 
     logger.info(
         "Packed %d/%d memories (~%d tokens) for user_id=%s",

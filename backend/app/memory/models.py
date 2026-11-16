@@ -88,6 +88,10 @@ class Memory(Base):
     archived: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=False, server_default=text("false")
     )
+    # Timestamp of the last decay run; decay is applied to the time since then.
+    last_decayed_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     superseded: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=False, server_default=text("false")
     )

@@ -6,13 +6,12 @@ import logging
 from uuid import UUID
 
 import redis.asyncio as redis
-from fastapi import APIRouter, Depends, Header, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.sessions import ensure_session_exists, touch_session_on_message
-from app.config import get_settings
 from app.core.dashscope_client import (
     CHAT_MODELS,
     generate_image,
@@ -20,6 +19,7 @@ from app.core.dashscope_client import (
 )
 from app.core.database import get_db
 from app.core.redis_client import get_redis
+from app.core.security import require_token
 from app.models.generated_asset import GeneratedAsset
 from app.services.usage import (
     USAGE_LIMIT_MESSAGE,
@@ -31,13 +31,6 @@ from app.services.voice_generation import generate_voice_overview
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api", tags=["generate"])
-
-
-def require_token(x_api_token: str = Header(default="")) -> None:
-    """Simple fixed-token auth for destructive endpoints (demo only)."""
-
-    if x_api_token != get_settings().demo_api_token:
-        raise HTTPException(status_code=401, detail="Invalid or missing API token")
 
 
 class GenerateImageRequest(BaseModel):

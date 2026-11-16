@@ -5,8 +5,10 @@ from __future__ import annotations
 import os
 from collections.abc import AsyncGenerator
 
+import pytest
 import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from app.core.database import get_db
@@ -23,7 +25,16 @@ TEST_DATABASE_URL = os.getenv(
 
 @pytest_asyncio.fixture
 async def db_session_factory():
+    """Session factory bound to TEST_DATABASE_URL; skips if the DB is unreachable."""
+
     engine = create_async_engine(TEST_DATABASE_URL, echo=False)
+    try:
+        async with engine.connect() as conn:
+            await conn.execute(text("SELECT 1"))
+    except Exception as exc:  # noqa: BLE001
+        await engine.dispose()
+        pytest.skip(f"Test database unreachable ({type(exc).__name__})")
+
     SessionLocal = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
 
     async with engine.begin() as conn:

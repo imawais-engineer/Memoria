@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+import logging
 import uuid
 from typing import Literal
 
+from fastapi.concurrency import run_in_threadpool
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field, model_validator
 from sqlalchemy import select
@@ -13,8 +15,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.dashscope_client import ALLOWED_CHAT_MODELS, DEFAULT_CHAT_MODEL
 from app.core.database import get_db
+from app.core.security import check_login_secret, hash_secret, is_hashed
 from app.models.user import User
 from app.schemas.persona import normalize_persona
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -156,7 +161,7 @@ async def signup(
         username=body.username,
         first_name=body.first_name,
         last_name=body.last_name,
-        favorite_book=body.favorite_book,
+        favorite_book=await run_in_threadpool(hash_secret, body.favorite_book),
     )
     db.add(user)
     try:
@@ -179,8 +184,22 @@ async def login(
     user = (
         await db.execute(select(User).where(User.username == body.username))
     ).scalar_one_or_none()
-    if user is None or user.favorite_book != body.favorite_book:
+    stored = user.favorite_book if user is not None else None
+    if not await run_in_threadpool(check_login_secret, body.favorite_book, stored):
         raise HTTPException(status_code=401, detail="Invalid username or favorite book")
+
+    if user is not None and not is_hashed(user.favorite_book):
+        # Legacy plaintext row: upgrade to a salted hash after a successful login.
+        # A failed upgrade must not fail a valid login.
+        try:
+            user.favorite_book = await run_in_threadpool(
+                hash_secret, body.favorite_book
+            )
+            await db.commit()
+            await db.refresh(user)
+        except Exception:
+            await db.rollback()
+            logger.warning("Failed to upgrade legacy login secret", exc_info=True)
 
     return _user_to_auth(user)
 

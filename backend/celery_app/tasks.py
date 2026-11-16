@@ -96,7 +96,7 @@ def decay_memories_task() -> dict[str, int]:
 
 @celery_app.task(name="consolidate_memories_task")
 def consolidate_memories_task() -> dict[str, int]:
-    """Weekly (Celery Beat, Sat 04:00 UTC) clustering + summarization per user."""
+    """Weekly (Celery Beat, Sun 04:00 UTC) clustering + summarization per user."""
 
     async def _run() -> dict[str, int]:
         user_ids = await fetch_active_user_ids()

@@ -109,7 +109,7 @@ Requires Python 3.12, Node 18+, PostgreSQL 16 with the `pgvector` extension, and
 # Backend
 cd backend
 python -m venv .venv && source .venv/bin/activate
-pip install -r requirements.txt
+pip install -r requirements.txt   # use requirements-dev.txt to also get pytest
 alembic upgrade head
 uvicorn app.main:app --reload           # http://localhost:8000
 
@@ -120,6 +120,21 @@ celery -A celery_app beat   --loglevel=info
 # Frontend (separate shell)
 cd frontend && npm install && npm run dev   # http://localhost:5173
 ```
+
+### Tests and CI
+
+```bash
+cd backend
+pip install -r requirements-dev.txt
+pytest -q -rs
+```
+
+The unit tests (security, decay math, Celery schedule, retrieval packing, ingestion parsing, consolidation clustering) need no services. API tests need Postgres with pgvector; set `TEST_DATABASE_URL` (default `postgresql+asyncpg://user:pass@localhost/memoria`). If the database is unreachable they are reported as skipped. GitHub Actions (`.github/workflows/backend-tests.yml`) runs the full suite against `pgvector/pgvector:pg16` and Redis, and builds the frontend.
+
+### Security notes
+
+- Soft passwords are stored as salted scrypt hashes (`scrypt$salt$hash`); legacy plaintext rows are upgraded on the next successful login.
+- Destructive endpoints are guarded by a shared demo token (`X-API-Token`, `DEMO_API_TOKEN`). It is a demo-grade guard, not per-user auth. Change it outside local demos.
 
 ### 2c. Alibaba Cloud ECS (production)
 
