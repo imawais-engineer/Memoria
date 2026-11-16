@@ -30,6 +30,7 @@ from sqlalchemy import delete
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.auth import decode_access_token
+from app.services.limits import enforce_mcp_limits, charge_mcp_tokens, estimate_tokens
 from app.memory.ingestion import extract_and_store_memories
 from app.memory.models import Memory
 from app.memory.retrieval import retrieve_with_why
@@ -154,17 +155,21 @@ def build_server() -> FastMCP:
     async def remember(text: str, session_id: str | None = None) -> str:
         """Extract and store durable memories from ``text``."""
         user_id = resolve_user_id()
+        await enforce_mcp_limits(user_id)
         async with open_session() as db:
-            return json.dumps(await remember_handler(user_id, text, db, session_id))
+            result = await remember_handler(user_id, text, db, session_id)
+        await charge_mcp_tokens(user_id, estimate_tokens(text))
+        return json.dumps(result)
 
     @mcp.tool()
     async def recall(query: str, include_superseded: bool = False) -> str:
         """Search memories. Each result has a ``why`` explanation."""
         user_id = resolve_user_id()
+        await enforce_mcp_limits(user_id)
         async with open_session() as db:
-            return json.dumps(
-                await recall_handler(user_id, query, db, include_superseded)
-            )
+            result = await recall_handler(user_id, query, db, include_superseded)
+        await charge_mcp_tokens(user_id, estimate_tokens(query))
+        return json.dumps(result)
 
     @mcp.tool()
     async def forget(memory_id: str) -> str:

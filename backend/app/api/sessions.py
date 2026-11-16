@@ -55,7 +55,12 @@ class ChatMessageOut(BaseModel):
 
 
 def _parse_owner(user_id: str) -> tuple[uuid.UUID | None, str | None]:
-    """Return ``(registered_user_uuid, guest_user_id)`` for an owner key."""
+    """Return ``(registered_user_uuid, guest_user_id)`` for an owner key.
+
+    The guest branch is legacy: JWT subjects must be UUIDs, so authenticated
+    callers always take the registered path. Kept so existing guest rows stay
+    readable by data tooling; no route can currently reach it with a token.
+    """
 
     try:
         return uuid.UUID(user_id), None

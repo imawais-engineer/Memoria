@@ -56,10 +56,13 @@ class Limiter:
     async def _incr(self, key: str, amount: int, ttl: int) -> int:
         if self.redis is not None:
             try:
-                value = int(await self.redis.incrby(key, amount))
-                if value == amount:
-                    await self.redis.expire(key, ttl)
-                return value
+                # One round trip, and the TTL is (re)set on every call so a
+                # failed first EXPIRE can never leave a key without expiry.
+                pipe = self.redis.pipeline(transaction=True)
+                pipe.incrby(key, amount)
+                pipe.expire(key, ttl)
+                results = await pipe.execute()
+                return int(results[0])
             except Exception:  # noqa: BLE001
                 logger.warning("Redis limiter unavailable, using in-memory", exc_info=True)
         return self.fallback.incr(key, amount, ttl)
@@ -135,3 +138,24 @@ async def enforce_limits(
     await limiter.check_rate(user_id, settings.rate_limit_per_min)
     await limiter.check_token_cap(user_id, settings.daily_token_cap)
     return user_id
+
+
+async def enforce_mcp_limits(user_id: str, limiter: Limiter | None = None) -> None:
+    """Rate limit and token cap for MCP tools (same budget as the REST API).
+
+    Raises ``ValueError`` so FastMCP reports it as a tool error.
+    """
+
+    limiter = limiter or get_limiter()
+    settings = get_settings()
+    try:
+        await limiter.check_rate(user_id, settings.rate_limit_per_min)
+        await limiter.check_token_cap(user_id, settings.daily_token_cap)
+    except HTTPException as exc:
+        raise ValueError(str(exc.detail)) from exc
+
+
+async def charge_mcp_tokens(
+    user_id: str, tokens: int, limiter: Limiter | None = None
+) -> None:
+    await (limiter or get_limiter()).add_tokens(user_id, tokens)

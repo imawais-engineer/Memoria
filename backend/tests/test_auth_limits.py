@@ -103,7 +103,8 @@ def test_authorize_claimed_user():
 
 
 def test_default_secret_refused_outside_dev():
-    validate_runtime_settings(Settings(_env_file=None))
+    validate_runtime_settings(Settings(_env_file=None, environment="dev"))
+    # Fails closed: no ENVIRONMENT set means production rules apply.
     with pytest.raises(RuntimeError):
         validate_runtime_settings(Settings(_env_file=None, environment="production"))
     with pytest.raises(RuntimeError):
@@ -261,9 +262,30 @@ class FakeRedis:
     async def get(self, key):
         return self.data.get(key)
 
+    def pipeline(self, transaction=True):
+        return FakePipeline(self)
+
+
+class FakePipeline:
+    def __init__(self, redis):
+        self.redis = redis
+        self.ops = []
+
+    def incrby(self, key, amount):
+        self.ops.append(("incrby", key, amount))
+
+    def expire(self, key, ttl):
+        self.ops.append(("expire", key, ttl))
+
+    async def execute(self):
+        out = []
+        for name, *args in self.ops:
+            out.append(await getattr(self.redis, name)(*args))
+        return out
+
 
 class BrokenRedis:
-    async def incrby(self, *a):
+    def pipeline(self, transaction=True):
         raise ConnectionError("down")
 
     async def get(self, *a):
@@ -316,3 +338,64 @@ async def test_route_returns_429_when_token_cap_hit(api, monkeypatch):
     finally:
         app.dependency_overrides.pop(get_limiter, None)
     assert res.status_code == 429
+
+
+def test_environment_defaults_to_production(monkeypatch):
+    monkeypatch.delenv("ENVIRONMENT", raising=False)
+    cfg = Settings(_env_file=None)
+    assert cfg.environment == "production"
+    with pytest.raises(RuntimeError):
+        validate_runtime_settings(cfg)
+
+
+async def test_expiry_set_on_every_increment():
+    redis = FakeRedis()
+    limiter = Limiter(redis)
+    await limiter.check_rate(ALICE, 10)
+    key = next(iter(redis.data))
+    redis.expiry.clear()  # simulate a lost TTL
+    await limiter.check_rate(ALICE, 10)
+    assert redis.expiry[key] == 61
+
+
+async def test_mcp_limits_apply_rate_and_cap(monkeypatch):
+    from app.config import get_settings
+    from app.services.limits import charge_mcp_tokens, enforce_mcp_limits
+
+    monkeypatch.setattr(get_settings(), "rate_limit_per_min", 2)
+    monkeypatch.setattr(get_settings(), "daily_token_cap", 10)
+    limiter = Limiter(None)
+    await enforce_mcp_limits(ALICE, limiter)
+    await charge_mcp_tokens(ALICE, 10, limiter)
+    with pytest.raises(ValueError, match="Daily token limit"):
+        await enforce_mcp_limits(ALICE, limiter)
+    monkeypatch.setattr(get_settings(), "daily_token_cap", 0)
+    with pytest.raises(ValueError, match="Rate limit"):
+        await enforce_mcp_limits(ALICE, limiter)
+
+
+async def test_stream_charges_tokens_on_failure(api, monkeypatch):
+    from app.api import chat as chat_module
+    from app.services.limits import get_limiter
+
+    async def boom(*a, **k):
+        yield {"type": "token", "token": "x" * 40}
+        raise RuntimeError("provider died")
+
+    limiter = Limiter(None)
+    async def no_limit(*a, **k):
+        return None
+
+    monkeypatch.setattr(chat_module, "handle_message_stream", boom)
+    monkeypatch.setattr(chat_module, "_enforce_message_limit", no_limit)
+    app.dependency_overrides[get_limiter] = lambda: limiter
+    try:
+        res = await api.post(
+            "/chat/stream",
+            json={"message": "hi there", "user_id": ALICE},
+            headers={"Authorization": f"Bearer {create_access_token(ALICE)}"},
+        )
+    finally:
+        app.dependency_overrides.pop(get_limiter, None)
+    assert "provider died" in res.text
+    assert await limiter._get(limiter._day_key(ALICE)) >= 10

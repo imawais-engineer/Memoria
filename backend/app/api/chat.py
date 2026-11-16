@@ -86,8 +86,8 @@ async def chat_stream(
     await _enforce_message_limit(db, user_id)
 
     async def event_generator():
+        streamed = 0
         try:
-            streamed = 0
             async for event in handle_message_stream(
                 user_id,
                 body.message,
@@ -109,11 +109,16 @@ async def chat_stream(
                     if event.get("title"):
                         payload["title"] = event["title"]
                 yield f"data: {json.dumps(payload)}\n\n"
-            await limiter.add_tokens(
-                user_id, estimate_tokens(body.message) + streamed // 4
-            )
         except Exception as exc:  # noqa: BLE001
             yield f"data: {json.dumps({'error': str(exc)})}\n\n"
+        finally:
+            # Charge on success, error and client disconnect alike.
+            try:
+                await limiter.add_tokens(
+                    user_id, estimate_tokens(body.message) + streamed // 4
+                )
+            except Exception:  # noqa: BLE001
+                pass
 
     return StreamingResponse(
         event_generator(),
