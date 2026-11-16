@@ -14,6 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.sessions import ensure_session_exists, touch_session_on_message
 from app.core.dashscope_client import (
     CHAT_MODELS,
+    IS_OPENAI_PROVIDER,
     generate_image,
     generate_video,
 )
@@ -126,11 +127,25 @@ async def _bind_media_session(
     return await touch_session_on_message(session_id, slash_message, db)
 
 
+def _require_media_support(what: str) -> None:
+    """Fail clearly (HTTP 501, no quota used) when the provider has no media."""
+
+    if IS_OPENAI_PROVIDER:
+        raise HTTPException(
+            status_code=501,
+            detail=(
+                f"{what} is only available with LLM_PROVIDER=dashscope; "
+                "the configured OpenAI-compatible provider does not support it."
+            ),
+        )
+
+
 @router.post("/generate/image", response_model=GenerateUrlResponse)
 async def create_image(
     body: GenerateImageRequest,
     db: AsyncSession = Depends(get_db),
 ) -> GenerateUrlResponse:
+    _require_media_support("Image generation")
     allowed = await check_and_increment_usage(db, body.user_id, "image")
     if not allowed:
         raise HTTPException(status_code=429, detail=USAGE_LIMIT_MESSAGE)
@@ -166,6 +181,7 @@ async def create_video(
     body: GenerateVideoRequest,
     db: AsyncSession = Depends(get_db),
 ) -> GenerateUrlResponse:
+    _require_media_support("Video generation")
     allowed = await check_and_increment_usage(db, body.user_id, "video")
     if not allowed:
         raise HTTPException(status_code=429, detail=USAGE_LIMIT_MESSAGE)
@@ -204,6 +220,7 @@ async def create_voice(
 ) -> GenerateVoiceResponse:
     """Two-step voice overview: Qwen summary of session context, then TTS."""
 
+    _require_media_support("Voice generation")
     allowed = await check_and_increment_usage(db, body.user_id, "audio")
     if not allowed:
         raise HTTPException(status_code=429, detail=USAGE_LIMIT_MESSAGE)

@@ -42,11 +42,39 @@ class Settings(BaseSettings):
     # (Beijing); set to the international endpoint for intl-region keys, e.g.
     # https://dashscope-intl.aliyuncs.com/api/v1
     dashscope_base_url: str = "https://dashscope-intl.aliyuncs.com/api/v1"
+
+    # --- Provider-agnostic LLM settings (any OpenAI-compatible API) ---------
+    # ``openai`` (any OpenAI-compatible endpoint) or ``dashscope`` (native SDK).
+    # Empty means: ``openai`` when LLM_BASE_URL is set, otherwise ``dashscope``.
+    llm_provider: str = ""
+    llm_base_url: str = ""
+    llm_api_key: str = ""
+    llm_chat_model: str = ""
+    llm_fast_model: str = ""
+    llm_embedding_model: str = ""
+    # Comma separated chat models shown in the model switcher.
+    llm_chat_models: str = ""
+    # Send ``dimensions`` with embedding requests (OpenAI text-embedding-3-*).
+    llm_embedding_send_dimensions: bool = False
+    llm_timeout_seconds: float = 120.0
+    # Expected embedding vector length. Must match the pgvector column.
+    embedding_dim: int = 1024
     database_url: str = "postgresql+asyncpg://user:pass@localhost/memoria"
     redis_url: str = "redis://localhost:6379/0"
     secret_key: str = "supersecret"
     # Fixed token guarding destructive demo endpoints (e.g. DELETE /api/memories).
     demo_api_token: str = "memoria-demo-token"
+
+
+def resolve_llm_provider(settings: Settings) -> str:
+    """Return ``openai`` or ``dashscope`` for the given settings."""
+
+    name = (settings.llm_provider or "").strip().lower()
+    if name in {"openai", "dashscope"}:
+        return name
+    if name:
+        raise ValueError(f"Unsupported LLM_PROVIDER {name!r}; use 'openai' or 'dashscope'")
+    return "openai" if settings.llm_base_url.strip() else "dashscope"
 
 
 @lru_cache(maxsize=1)

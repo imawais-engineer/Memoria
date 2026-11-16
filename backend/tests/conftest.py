@@ -3,7 +3,11 @@
 from __future__ import annotations
 
 import os
+import socket
+import threading
+import time
 from collections.abc import AsyncGenerator
+from types import SimpleNamespace
 
 import pytest
 import pytest_asyncio
@@ -59,3 +63,50 @@ async def client(db_session_factory) -> AsyncGenerator[AsyncClient, None]:
     async with AsyncClient(transport=transport, base_url="http://test") as ac:
         yield ac
     app.dependency_overrides.clear()
+
+
+@pytest.fixture(scope="session")
+def mock_llm_server():
+    """Run the mock OpenAI-compatible server on a free local port."""
+
+    import uvicorn
+
+    from tests.mock_openai_server import create_mock_app
+
+    with socket.socket() as sock:
+        sock.bind(("127.0.0.1", 0))
+        port = sock.getsockname()[1]
+    mock_app = create_mock_app()
+    server = uvicorn.Server(
+        uvicorn.Config(mock_app, host="127.0.0.1", port=port, log_level="warning")
+    )
+    thread = threading.Thread(target=server.run, daemon=True)
+    thread.start()
+    for _ in range(100):
+        if server.started:
+            break
+        time.sleep(0.05)
+    else:  # pragma: no cover
+        pytest.fail("mock LLM server did not start")
+    yield SimpleNamespace(base_url=f"http://127.0.0.1:{port}/v1", app=mock_app)
+    server.should_exit = True
+    thread.join(timeout=5)
+
+
+@pytest.fixture
+def openai_provider(mock_llm_server):
+    """Factory building an OpenAICompatProvider pointed at the mock server."""
+
+    from app.config import Settings
+    from app.core.llm.openai_compat import OpenAICompatProvider
+
+    def make(**overrides):
+        settings = Settings(
+            _env_file=None,
+            llm_base_url=mock_llm_server.base_url,
+            llm_api_key="test-key",
+            **overrides,
+        )
+        return OpenAICompatProvider(settings)
+
+    return make

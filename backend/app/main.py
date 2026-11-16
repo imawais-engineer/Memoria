@@ -6,6 +6,9 @@ Celery and DashScope wiring are added in later modules.
 
 from __future__ import annotations
 
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
@@ -22,7 +25,8 @@ from app.api.memories import router as memories_router
 from app.api.sessions import router as sessions_router
 from app.api.tasks import router as tasks_router
 from app.config import Settings, get_settings
-from app.core.database import get_db  # noqa: F401  (exposed for later routes)
+from app.core.database import engine, get_db  # noqa: F401  (exposed for later routes)
+from app.core.llm.dimcheck import check_embedding_dim
 from app.mcp.memory_skill import MEMORY_TOOL_CATALOG
 
 
@@ -39,7 +43,13 @@ def create_app() -> FastAPI:
 
     settings: Settings = get_settings()
 
+    @asynccontextmanager
+    async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
+        await check_embedding_dim(engine, settings.embedding_dim)
+        yield
+
     application = FastAPI(
+        lifespan=lifespan,
         title="Memoria",
         version=__version__,
         summary="Personal AI with long-term memory (Qwen Cloud Hackathon).",

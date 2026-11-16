@@ -1,91 +1,72 @@
-"""DashScope (Qwen) client helpers.
+"""Backwards compatible facade over the provider layer in ``app.core.llm``.
 
-Provides a configured DashScope handle and an awaitable wrapper around Qwen
-function/tool calling for use by the memory ingestion pipeline.
-
-The DashScope SDK's ``Generation.call`` is synchronous and network-bound, so we
-run it in a worker thread via ``asyncio.to_thread`` to keep the async event loop
-responsive.
+All AI calls in the app go through the names in this module (``call_qwen_chat``,
+``stream_qwen_chat``, ``get_embedding`` ...). They dispatch to the provider
+selected by ``LLM_PROVIDER`` (any OpenAI-compatible API, or DashScope). The
+function names are kept so existing imports and test patches keep working.
 """
 
 from __future__ import annotations
 
-import asyncio
-import json
-import logging
-import os
-import queue
-import threading
 from collections.abc import AsyncIterator
-from http import HTTPStatus
-from types import ModuleType
 from typing import Any
 
-import dashscope
+from app.config import get_settings, resolve_llm_provider
+from app.core.llm import get_provider
+from app.core.llm.base import (
+    EmbeddingDimensionError,
+    LLMError,
+    UnsupportedCapabilityError,
+    check_embedding_dim,
+)
+from app.core.llm.dashscope_provider import (  # noqa: F401  (re-exported)
+    IMAGE_DEFAULT_SIZE,
+    IMAGE_MODEL,
+    TTS_MODEL,
+    TTS_VOICE,
+    VIDEO_DEFAULT_DURATION,
+    VIDEO_MODEL,
+    get_dashscope_client,
+)
 
-from app.config import get_settings
+_settings = get_settings()
+IS_OPENAI_PROVIDER = resolve_llm_provider(_settings) == "openai"
 
-logger = logging.getLogger(__name__)
-
-# Default Qwen model used for memory extraction / tool calling.
-DEFAULT_MODEL = "qwen3-plus"
-
-# Chat models exposed to the frontend model switcher.
-CHAT_MODELS = [
-    {"id": "qwen-plus", "name": "Qwen Plus (balanced)"},
-    {"id": "qwen-max", "name": "Qwen Max (powerful)"},
-    {"id": "qwq-plus", "name": "QwQ Plus (reasoning)"},
-    {"id": "qwen-turbo", "name": "Qwen Turbo (fast)"},
-]
-ALLOWED_CHAT_MODELS = {item["id"] for item in CHAT_MODELS}
-DEFAULT_CHAT_MODEL = "qwen-plus"
-
-# Multimodal generation models (DashScope / Qwen Cloud console IDs).
-IMAGE_MODEL = "wan2.1-t2i-plus"
-VIDEO_MODEL = "wan2.1-t2v-turbo"
-TTS_MODEL = "qwen3-tts-flash"
-TTS_VOICE = "Cherry"
-
-# Official defaults per https://docs.qwencloud.com (no user-facing overrides).
-IMAGE_DEFAULT_SIZE = "1280*1280"
-VIDEO_DEFAULT_DURATION = 5
-
-# Default embedding model.
+# Default embedding model (mapped to LLM_EMBEDDING_MODEL on OpenAI providers).
 DEFAULT_EMBEDDING_MODEL = "text-embedding-v3"
 
 
-def get_dashscope_client() -> ModuleType:
-    """Configure and return the DashScope module.
-
-    The DashScope SDK is module-global: setting ``dashscope.api_key`` configures
-    all subsequent calls. We source the key from application settings, falling
-    back to the ``DASHSCOPE_API_KEY`` environment variable if settings are empty.
-    Returns the ``dashscope`` module so callers can invoke its APIs directly.
-    """
-
-    settings = get_settings()
-    api_key = (
-        settings.dashscope_api_key
-        or settings.qwen_dashscope_api
-        or os.getenv("DASHSCOPE_API_KEY", "")
-        or os.getenv("QWEN_DASHSCOPE_API", "")
+def _build_chat_models() -> list[dict[str, str]]:
+    if not IS_OPENAI_PROVIDER:
+        return [
+            {"id": "qwen-plus", "name": "Qwen Plus (balanced)"},
+            {"id": "qwen-max", "name": "Qwen Max (powerful)"},
+            {"id": "qwq-plus", "name": "QwQ Plus (reasoning)"},
+            {"id": "qwen-turbo", "name": "Qwen Turbo (fast)"},
+        ]
+    ids = [m.strip() for m in _settings.llm_chat_models.split(",") if m.strip()]
+    primary = _settings.llm_chat_model.strip() or (ids[0] if ids else "") or (
+        _settings.llm_fast_model.strip() or "gpt-4o-mini"
     )
+    if primary not in ids:
+        ids.insert(0, primary)
+    return [{"id": i, "name": i} for i in ids]
 
-    if not api_key:
-        # Not fatal at import/config time; the actual API call will fail clearly
-        # if it proceeds without a key.
-        logger.warning(
-            "DASHSCOPE_API_KEY is not set; DashScope calls will fail until it is "
-            "configured."
-        )
 
-    dashscope.api_key = api_key
-
-    # Apply an endpoint override when configured (e.g. international region).
-    if settings.dashscope_base_url:
-        dashscope.base_http_api_url = settings.dashscope_base_url
-
-    return dashscope
+# Chat models exposed to the frontend model switcher.
+CHAT_MODELS = _build_chat_models()
+ALLOWED_CHAT_MODELS = {item["id"] for item in CHAT_MODELS}
+DEFAULT_CHAT_MODEL = (
+    (_settings.llm_chat_model.strip() or CHAT_MODELS[0]["id"])
+    if IS_OPENAI_PROVIDER
+    else "qwen-plus"
+)
+# Model for memory extraction / tool calling / structured output.
+DEFAULT_MODEL = (
+    (_settings.llm_fast_model.strip() or DEFAULT_CHAT_MODEL)
+    if IS_OPENAI_PROVIDER
+    else "qwen3-plus"
+)
 
 
 async def call_qwen_with_functions(
@@ -93,85 +74,10 @@ async def call_qwen_with_functions(
     functions: list[dict[str, Any]],
     model: str = DEFAULT_MODEL,
 ) -> Any:
-    """Call Qwen with tool/function definitions and return the raw response.
+    """Chat with tool definitions. Returns an object with
+    ``.output["choices"][0]["message"]`` (``tool_calls`` inside)."""
 
-    Args:
-        messages: Chat messages in DashScope format
-            (``[{"role": "user", "content": "..."}, ...]``).
-        functions: Tool/function definitions passed as ``tools``.
-        model: Qwen model name (defaults to :data:`DEFAULT_MODEL`).
-
-    Returns:
-        The DashScope ``GenerationResponse`` object.
-
-    Raises:
-        RuntimeError: If the API returns a non-OK status code or the SDK call
-            raises. Errors are logged before being re-raised.
-    """
-
-    client = get_dashscope_client()
-
-    def _invoke() -> Any:
-        return client.Generation.call(
-            model=model,
-            messages=messages,
-            tools=functions,
-            result_format="message",
-        )
-
-    try:
-        response = await asyncio.to_thread(_invoke)
-    except Exception:  # noqa: BLE001 - log context then re-raise
-        logger.exception("DashScope Generation.call failed (model=%s)", model)
-        raise
-
-    status_code = getattr(response, "status_code", HTTPStatus.OK)
-    if status_code != HTTPStatus.OK:
-        code = getattr(response, "code", None)
-        message = getattr(response, "message", None)
-        logger.error(
-            "DashScope returned non-OK status %s (code=%s): %s",
-            status_code,
-            code,
-            message,
-        )
-        raise RuntimeError(
-            f"DashScope call failed with status {status_code} "
-            f"(code={code}): {message}"
-        )
-
-    return response
-
-
-def _parse_structured_output(response: Any) -> dict[str, Any]:
-    """Extract a JSON object from a DashScope structured-output response."""
-
-    output = getattr(response, "output", None)
-    if output is None:
-        raise RuntimeError("DashScope structured response missing output")
-
-    if isinstance(output, dict):
-        if isinstance(output.get("text"), dict):
-            return output["text"]
-        choices = output.get("choices") or []
-        if choices:
-            message = choices[0].get("message", {})
-            content = message.get("content")
-            if isinstance(content, dict):
-                return content
-            if isinstance(content, str) and content.strip():
-                return json.loads(content)
-
-    choices = getattr(output, "choices", None)
-    if choices:
-        message = choices[0].message
-        content = message.get("content") if isinstance(message, dict) else message.content
-        if isinstance(content, dict):
-            return content
-        if isinstance(content, str) and content.strip():
-            return json.loads(content)
-
-    raise RuntimeError("Unable to parse structured JSON from DashScope response")
+    return await get_provider().chat_with_tools(messages, functions, model)
 
 
 async def call_qwen_structured(
@@ -179,260 +85,49 @@ async def call_qwen_structured(
     json_schema: dict[str, Any],
     model: str = "qwen-plus",
 ) -> dict[str, Any]:
-    """Call Qwen with strict JSON schema output and return the parsed object.
+    """Return a JSON object conforming to ``json_schema``."""
 
-    Uses DashScope ``Generation.call`` with ``result_format="json"`` and the
-    provided ``json_schema``. The international base URL is applied via
-    :func:`get_dashscope_client` when configured.
-    """
-
-    client = get_dashscope_client()
-
-    def _invoke() -> Any:
-        return client.Generation.call(
-            model=model,
-            messages=messages,
-            result_format="json",
-            json_schema=json_schema,
-            response_format={
-                "type": "json_schema",
-                "json_schema": {
-                    "name": "structured_output",
-                    "schema": json_schema,
-                    "strict": True,
-                },
-            },
-        )
-
-    try:
-        response = await asyncio.to_thread(_invoke)
-    except Exception:  # noqa: BLE001 - log context then re-raise
-        logger.exception(
-            "DashScope Generation.call (structured) failed (model=%s)", model
-        )
-        raise
-
-    status_code = getattr(response, "status_code", HTTPStatus.OK)
-    if status_code != HTTPStatus.OK:
-        code = getattr(response, "code", None)
-        message = getattr(response, "message", None)
-        logger.error(
-            "DashScope structured call returned non-OK status %s (code=%s): %s",
-            status_code,
-            code,
-            message,
-        )
-        raise RuntimeError(
-            f"DashScope structured call failed with status {status_code} "
-            f"(code={code}): {message}"
-        )
-
-    try:
-        return _parse_structured_output(response)
-    except Exception as exc:
-        logger.exception("Failed to parse structured DashScope response")
-        raise RuntimeError("Failed to parse structured DashScope response") from exc
+    return await get_provider().structured(messages, json_schema, model)
 
 
 async def call_qwen_chat(
     messages: list[dict[str, Any]],
     model: str = DEFAULT_MODEL,
 ) -> str:
-    """Call Qwen for a plain text completion and return the message content.
+    """Plain text completion. Reasoning content is never included."""
 
-    Awaitable wrapper over the sync ``Generation.call``. Logs and raises
-    ``RuntimeError`` on a non-OK status or SDK error.
-    """
-
-    client = get_dashscope_client()
-
-    def _invoke() -> Any:
-        return client.Generation.call(
-            model=model,
-            messages=messages,
-            result_format="message",
-        )
-
-    try:
-        response = await asyncio.to_thread(_invoke)
-    except Exception:  # noqa: BLE001 - log context then re-raise
-        logger.exception("DashScope Generation.call (chat) failed (model=%s)", model)
-        raise
-
-    status_code = getattr(response, "status_code", HTTPStatus.OK)
-    if status_code != HTTPStatus.OK:
-        code = getattr(response, "code", None)
-        message = getattr(response, "message", None)
-        logger.error(
-            "DashScope chat returned non-OK status %s (code=%s): %s",
-            status_code,
-            code,
-            message,
-        )
-        raise RuntimeError(
-            f"DashScope chat failed with status {status_code} "
-            f"(code={code}): {message}"
-        )
-
-    return response.output["choices"][0]["message"]["content"]
+    return await get_provider().chat(messages, model)
 
 
 async def stream_qwen_chat(
     messages: list[dict[str, Any]],
     model: str = DEFAULT_MODEL,
 ) -> AsyncIterator[str]:
-    """Stream Qwen chat tokens as they arrive from DashScope."""
+    """Stream answer tokens (reasoning is filtered out)."""
 
-    client = get_dashscope_client()
-    token_queue: queue.Queue[tuple[str, Any]] = queue.Queue()
-    loop = asyncio.get_running_loop()
+    async for event in get_provider().stream_events(messages, model):
+        if event.kind == "content":
+            yield event.text
 
-    def _producer() -> None:
-        try:
-            responses = client.Generation.call(
-                model=model,
-                messages=messages,
-                result_format="message",
-                stream=True,
-                incremental_output=True,
-            )
-            for response in responses:
-                status_code = getattr(response, "status_code", HTTPStatus.OK)
-                if status_code != HTTPStatus.OK:
-                    loop.call_soon_threadsafe(
-                        token_queue.put_nowait, ("error", response)
-                    )
-                    return
-                output = getattr(response, "output", None) or {}
-                choices = (
-                    output.get("choices")
-                    if isinstance(output, dict)
-                    else getattr(output, "choices", None)
-                )
-                if not choices:
-                    continue
-                choice = choices[0]
-                message = (
-                    choice.get("message")
-                    if isinstance(choice, dict)
-                    else getattr(choice, "message", None)
-                )
-                content = None
-                if isinstance(message, dict):
-                    content = message.get("content")
-                elif message is not None:
-                    content = getattr(message, "content", None)
-                if content:
-                    loop.call_soon_threadsafe(
-                        token_queue.put_nowait, ("token", content)
-                    )
-            loop.call_soon_threadsafe(token_queue.put_nowait, ("done", None))
-        except Exception as exc:  # noqa: BLE001
-            loop.call_soon_threadsafe(token_queue.put_nowait, ("error", exc))
 
-    threading.Thread(target=_producer, daemon=True).start()
+async def stream_chat_events(
+    messages: list[dict[str, Any]],
+    model: str = DEFAULT_MODEL,
+):
+    """Stream ``StreamEvent`` items, with reasoning separated from content."""
 
-    while True:
-        kind, payload = await asyncio.to_thread(token_queue.get)
-        if kind == "token":
-            yield str(payload)
-        elif kind == "done":
-            break
-        elif kind == "error":
-            if isinstance(payload, Exception):
-                logger.exception("DashScope streaming failed (model=%s)", model)
-                raise RuntimeError("DashScope streaming failed") from payload
-            code = getattr(payload, "code", None)
-            message = getattr(payload, "message", None)
-            status_code = getattr(payload, "status_code", None)
-            raise RuntimeError(
-                f"DashScope streaming failed with status {status_code} "
-                f"(code={code}): {message}"
-            )
+    async for event in get_provider().stream_events(messages, model):
+        yield event
 
 
 async def get_embedding(
     text_input: str,
     model: str = DEFAULT_EMBEDDING_MODEL,
 ) -> list[float]:
-    """Return the embedding vector for ``text_input`` using DashScope.
+    """Return the embedding for ``text_input``, validated against EMBEDDING_DIM."""
 
-    Wraps the synchronous ``TextEmbedding.call`` in a worker thread. Logs and
-    raises ``RuntimeError`` on a non-OK status or SDK error.
-    """
-
-    client = get_dashscope_client()
-
-    def _invoke() -> Any:
-        return client.TextEmbedding.call(model=model, input=text_input)
-
-    try:
-        response = await asyncio.to_thread(_invoke)
-    except Exception:  # noqa: BLE001 - log context then re-raise
-        logger.exception("DashScope TextEmbedding.call failed (model=%s)", model)
-        raise
-
-    status_code = getattr(response, "status_code", HTTPStatus.OK)
-    if status_code != HTTPStatus.OK:
-        code = getattr(response, "code", None)
-        message = getattr(response, "message", None)
-        logger.error(
-            "DashScope embedding returned non-OK status %s (code=%s): %s",
-            status_code,
-            code,
-            message,
-        )
-        raise RuntimeError(
-            f"DashScope embedding failed with status {status_code} "
-            f"(code={code}): {message}"
-        )
-
-    return response.output["embeddings"][0]["embedding"]
-
-
-def _dashscope_status_ok(response: Any) -> bool:
-    status_code = getattr(response, "status_code", HTTPStatus.OK)
-    return status_code == HTTPStatus.OK
-
-
-def _raise_dashscope_error(response: Any, label: str) -> None:
-    code = getattr(response, "code", None)
-    message = getattr(response, "message", None)
-    status_code = getattr(response, "status_code", None)
-    logger.error(
-        "DashScope %s returned non-OK status %s (code=%s): %s",
-        label,
-        status_code,
-        code,
-        message,
-    )
-    raise RuntimeError(
-        f"DashScope {label} failed with status {status_code} "
-        f"(code={code}): {message}"
-    )
-
-
-def _extract_image_url(response: Any) -> str:
-    output = getattr(response, "output", None) or {}
-    results = output.get("results") if isinstance(output, dict) else getattr(output, "results", None)
-    if not results:
-        raise RuntimeError("DashScope image response missing results")
-
-    first = results[0]
-    url = first.get("url") if isinstance(first, dict) else getattr(first, "url", None)
-    if not url and hasattr(first, "get"):
-        url = first.get("url")
-    if not url:
-        raise RuntimeError("DashScope image response missing url")
-    return url
-
-
-def _extract_video_url(response: Any) -> str:
-    output = getattr(response, "output", None) or {}
-    url = output.get("video_url") if isinstance(output, dict) else getattr(output, "video_url", None)
-    if not url:
-        raise RuntimeError("DashScope video response missing video_url")
-    return url
+    vector = await get_provider().embed(text_input, model)
+    return check_embedding_dim(vector, get_settings().embedding_dim)
 
 
 async def generate_image(
@@ -440,46 +135,9 @@ async def generate_image(
     model: str = IMAGE_MODEL,
     size: str = IMAGE_DEFAULT_SIZE,
 ) -> str:
-    """Generate an image and return its URL (DashScope default size)."""
+    """Generate an image and return its URL (DashScope only)."""
 
-    from dashscope import ImageSynthesis
-
-    get_dashscope_client()
-
-    def _invoke() -> Any:
-        response = ImageSynthesis.call(
-            model=model,
-            prompt=prompt,
-            n=1,
-            size=size,
-        )
-        if not _dashscope_status_ok(response):
-            return response
-
-        output = getattr(response, "output", None) or {}
-        if isinstance(output, dict) and output.get("task_status") == "FAILED":
-            return response
-
-        try:
-            return _extract_image_url(response)
-        except RuntimeError:
-            waited = ImageSynthesis.wait(response)
-            if not _dashscope_status_ok(waited):
-                return waited
-            return _extract_image_url(waited)
-
-    try:
-        result = await asyncio.to_thread(_invoke)
-    except Exception:  # noqa: BLE001
-        logger.exception("DashScope ImageSynthesis failed (model=%s)", model)
-        raise
-
-    if isinstance(result, str):
-        return result
-
-    if not _dashscope_status_ok(result):
-        _raise_dashscope_error(result, "image synthesis")
-    return _extract_image_url(result)
+    return await get_provider().generate_image(prompt, model, size)
 
 
 async def generate_video(
@@ -487,32 +145,9 @@ async def generate_video(
     model: str = VIDEO_MODEL,
     duration: int = VIDEO_DEFAULT_DURATION,
 ) -> str:
-    """Generate a video and return its URL (DashScope default duration)."""
+    """Generate a video and return its URL (DashScope only)."""
 
-    from dashscope import VideoSynthesis
-
-    get_dashscope_client()
-
-    def _invoke() -> Any:
-        task = VideoSynthesis.async_call(
-            model=model,
-            prompt=prompt,
-            duration=duration,
-        )
-        if not _dashscope_status_ok(task):
-            return task
-        result = VideoSynthesis.wait(task)
-        return result
-
-    try:
-        response = await asyncio.to_thread(_invoke)
-    except Exception:  # noqa: BLE001
-        logger.exception("DashScope VideoSynthesis failed (model=%s)", model)
-        raise
-
-    if not _dashscope_status_ok(response):
-        _raise_dashscope_error(response, "video synthesis")
-    return _extract_video_url(response)
+    return await get_provider().generate_video(prompt, model, duration)
 
 
 async def synthesize_speech(
@@ -520,35 +155,26 @@ async def synthesize_speech(
     model: str = TTS_MODEL,
     voice: str = TTS_VOICE,
 ) -> str:
-    """Synthesize speech via Qwen-TTS and return an audio URL for ``<audio src>``."""
+    """Synthesize speech and return an audio URL (DashScope only)."""
 
-    from dashscope import MultiModalConversation
+    return await get_provider().synthesize_speech(text, model, voice)
 
-    get_dashscope_client()
 
-    def _invoke() -> Any:
-        return MultiModalConversation.call(
-            model=model,
-            text=text,
-            voice=voice,
-        )
-
-    try:
-        response = await asyncio.to_thread(_invoke)
-    except Exception:  # noqa: BLE001
-        logger.exception("DashScope Qwen-TTS failed (model=%s)", model)
-        raise
-
-    if not _dashscope_status_ok(response):
-        _raise_dashscope_error(response, "speech synthesis")
-
-    output = getattr(response, "output", None) or {}
-    audio = output.get("audio") if isinstance(output, dict) else None
-    url = None
-    if isinstance(audio, dict):
-        url = audio.get("url")
-    elif audio is not None:
-        url = getattr(audio, "url", None)
-    if not url:
-        raise RuntimeError("DashScope TTS response missing audio url")
-    return url
+__all__ = [
+    "ALLOWED_CHAT_MODELS",
+    "CHAT_MODELS",
+    "DEFAULT_CHAT_MODEL",
+    "DEFAULT_EMBEDDING_MODEL",
+    "DEFAULT_MODEL",
+    "EmbeddingDimensionError",
+    "LLMError",
+    "UnsupportedCapabilityError",
+    "call_qwen_chat",
+    "call_qwen_structured",
+    "call_qwen_with_functions",
+    "generate_image",
+    "generate_video",
+    "get_embedding",
+    "stream_qwen_chat",
+    "synthesize_speech",
+]
