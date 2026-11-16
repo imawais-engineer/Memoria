@@ -146,3 +146,43 @@ def test_http_lists_and_calls_tools(monkeypatch):
             "params": {"name": "recall", "arguments": {"query": "tea"}}})
         payload = json.loads(r.json()["result"]["content"][0]["text"])
         assert payload["user"] == USER
+
+
+@pytest.mark.asyncio
+async def test_remember_charges_tokens_on_failure_and_includes_memories(monkeypatch):
+    charged = []
+
+    async def fake_enforce(user_id, limiter=None):
+        return None
+
+    async def fake_charge(user_id, tokens, limiter=None):
+        charged.append(tokens)
+
+    class _S:
+        async def __aenter__(self):
+            return object()
+
+        async def __aexit__(self, *a):
+            return False
+
+    monkeypatch.setattr(srv, "enforce_mcp_limits", fake_enforce)
+    monkeypatch.setattr(srv, "charge_mcp_tokens", fake_charge)
+    monkeypatch.setattr(srv, "open_session", lambda: _S())
+    monkeypatch.setenv("MEMORIA_MCP_USER_ID", USER)
+    server = srv.build_server()
+
+    async def ok(user_id, text, db, session_id=None):
+        return {"stored": 1, "memories": [{"content": "x" * 400}]}
+
+    monkeypatch.setattr(srv, "remember_handler", ok)
+    await server.call_tool("remember", {"text": "hi"})
+    assert charged[-1] == srv.estimate_tokens("hi", "x" * 400)
+    assert charged[-1] > srv.estimate_tokens("hi")
+
+    async def boom(user_id, text, db, session_id=None):
+        raise RuntimeError("provider down")
+
+    monkeypatch.setattr(srv, "remember_handler", boom)
+    with pytest.raises(Exception):
+        await server.call_tool("remember", {"text": "hi"})
+    assert charged[-1] == srv.estimate_tokens("hi")

@@ -51,6 +51,13 @@ variable "llm_base_url" {
   default     = ""
 }
 
+variable "metrics_token" {
+  description = "Bearer token required by GET /metrics (METRICS_TOKEN). Empty keeps /metrics closed (403)."
+  type        = string
+  sensitive   = true
+  default     = ""
+}
+
 variable "llm_api_key" {
   description = "API key for the OpenAI-compatible provider (LLM_API_KEY)."
   type        = string
@@ -260,6 +267,7 @@ locals {
     cat > /etc/memoria.env <<'ENVEOF'
     ENVIRONMENT=production
     SECRET_KEY=${random_password.secret_key.result}
+    METRICS_TOKEN=${var.metrics_token}
     DATABASE_URL=${local.database_url}
     REDIS_URL=${local.redis_url}
     DASHSCOPE_API_KEY=${var.dashscope_api_key}

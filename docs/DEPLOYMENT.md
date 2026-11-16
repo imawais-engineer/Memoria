@@ -72,7 +72,7 @@ Memoria uses one provider at a time, chosen by environment variables
 |---|---|---|---|
 | `GET /health` | Liveness. No dependencies touched. | 200 | process down |
 | `GET /health/ready` | Readiness. Runs `SELECT 1` on Postgres and `PING` on Redis, each with a 3 second timeout. | 200 `{"status":"ready"}` | 503 `{"status":"unavailable","checks":{"database":"error",...}}` |
-| `GET /metrics` | Prometheus text format. | 200 | n/a |
+| `GET /metrics` | Prometheus text format. Needs `Authorization: Bearer <METRICS_TOKEN>`. | 200 | 401 wrong token, 403 no `METRICS_TOKEN` set |
 
 The 503 body names the failing dependency but never includes the error text,
 hostnames or connection strings.
@@ -81,9 +81,12 @@ hostnames or connection strings.
 `memoria_http_request_duration_seconds_sum/_count{method,path}` and
 `memoria_uptime_seconds`. Paths are route templates, so labels stay bounded.
 Counters live in process memory and reset on restart. If you run more than one
-uvicorn worker process, scrape each instance. `/metrics` has no authentication:
-do not expose it publicly. Block it at your reverse proxy or security group and
-let only the Prometheus host reach it.
+uvicorn worker process, scrape each instance. `/metrics` requires a bearer
+token. Set `METRICS_TOKEN` (compose reads it from `.env`, Terraform from the
+sensitive `metrics_token` variable, written to `/etc/memoria.env`). Outside
+`ENVIRONMENT=dev`, an unset token makes `/metrics` return 403 and a wrong token
+returns 401. The token does not replace network controls: also restrict the
+path at your reverse proxy or security group to the Prometheus host.
 
 Compose health checks: `db` (`pg_isready`), `redis` (`redis-cli ping`),
 `backend` (`/health/ready`) and `worker` (`celery inspect ping`). Use
@@ -97,6 +100,9 @@ it.
 scrape_configs:
   - job_name: memoria
     metrics_path: /metrics
+    authorization:
+      type: Bearer
+      credentials: <METRICS_TOKEN>   # or use credentials_file
     static_configs:
       - targets: ["memoria-app:8000"]
   - job_name: memoria-ready
@@ -189,7 +195,7 @@ consistent.
   narrow `app_ingress_cidr` to the proxy if possible. The API is plain HTTP.
 - CORS is currently open (`*`) in `app/main.py`. Restrict it before a public
   launch.
-- Block `/metrics` from the public internet.
+- Set `METRICS_TOKEN` and block `/metrics` from the public internet.
 - RDS `security_ips` and Redis are limited to the VPC CIDR.
 
 ## Known gaps

@@ -156,10 +156,16 @@ def build_server() -> FastMCP:
         """Extract and store durable memories from ``text``."""
         user_id = resolve_user_id()
         await enforce_mcp_limits(user_id)
-        async with open_session() as db:
-            result = await remember_handler(user_id, text, db, session_id)
-        await charge_mcp_tokens(user_id, estimate_tokens(text))
-        return json.dumps(result)
+        result: dict[str, Any] | None = None
+        try:
+            async with open_session() as db:
+                result = await remember_handler(user_id, text, db, session_id)
+            return json.dumps(result)
+        finally:
+            # Charge even when the handler fails after the provider call.
+            # Stored memory text approximates the LLM extraction output.
+            stored = [m["content"] for m in (result or {}).get("memories", [])]
+            await charge_mcp_tokens(user_id, estimate_tokens(text or "", *stored))
 
     @mcp.tool()
     async def recall(query: str, include_superseded: bool = False) -> str:

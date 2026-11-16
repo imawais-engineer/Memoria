@@ -15,6 +15,7 @@ x-backend-env: &backend-env
   REDIS_URL: redis://redis:6379/0
   ENVIRONMENT: ${ENVIRONMENT:-production}
   SECRET_KEY: ${SECRET_KEY:?set SECRET_KEY (32+ random chars), or ENVIRONMENT=dev with a dev key}
+  METRICS_TOKEN: ${METRICS_TOKEN:-}
   DASHSCOPE_API_KEY: ${DASHSCOPE_API_KEY:-}
   DASHSCOPE_BASE_URL: ${DASHSCOPE_BASE_URL:-}
   LLM_PROVIDER: ${LLM_PROVIDER:-}
