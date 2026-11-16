@@ -65,7 +65,7 @@ function loadStoredAuth() {
     const raw = localStorage.getItem(AUTH_STORAGE_KEY)
     if (!raw) return null
     const parsed = JSON.parse(raw)
-    if (parsed?.user_id && parsed?.username) return parsed
+    if (parsed?.user_id && parsed?.username && parsed?.access_token) return parsed
   } catch {
     // ignore corrupt storage
   }
@@ -631,6 +631,7 @@ export default function App() {
     setAuth((current) => {
       if (
         current?.user_id === user.user_id &&
+        (user.access_token ?? current?.access_token) === current?.access_token &&
         current?.username === user.username &&
         current?.global_memory_enabled === user.global_memory_enabled &&
         current?.default_chat_model === user.default_chat_model &&
@@ -640,8 +641,10 @@ export default function App() {
       ) {
         return current
       }
-      localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(user))
-      return user
+      // Preference updates omit the token; keep the one from login.
+      const next = { ...user, access_token: user.access_token ?? current?.access_token }
+      localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(next))
+      return next
     })
   }, [])
 
