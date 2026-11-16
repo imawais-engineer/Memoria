@@ -64,6 +64,44 @@ class Settings(BaseSettings):
     secret_key: str = "supersecret"
     # Fixed token guarding destructive demo endpoints (e.g. DELETE /api/memories).
     demo_api_token: str = "memoria-demo-token"
+    # ``dev`` or ``production``. Outside dev the default SECRET_KEY is refused.
+    environment: str = "dev"
+    # Access token lifetime for JWTs issued by /auth/login and /auth/signup.
+    access_token_ttl_minutes: int = 60 * 24
+    # Enforce the legacy X-API-Token guard on destructive routes. Empty means
+    # enabled in dev and disabled elsewhere (JWT is always required).
+    allow_demo_token: bool | None = None
+    # Per-user requests per minute on LLM-backed routes (0 disables).
+    rate_limit_per_min: int = 30
+    # Per-user estimated LLM tokens per UTC day (0 disables).
+    daily_token_cap: int = 200_000
+
+
+DEFAULT_SECRET_KEY = "supersecret"
+
+
+def is_dev(settings: Settings) -> bool:
+    return settings.environment.strip().lower() in {"dev", "development", "local", "test"}
+
+
+def demo_token_enabled(settings: Settings) -> bool:
+    """Whether the X-API-Token demo guard applies (default: only in dev)."""
+
+    if settings.allow_demo_token is not None:
+        return settings.allow_demo_token
+    return is_dev(settings)
+
+
+def validate_runtime_settings(settings: Settings) -> None:
+    """Refuse to start outside dev with the default or a weak SECRET_KEY."""
+
+    if not is_dev(settings) and (
+        settings.secret_key == DEFAULT_SECRET_KEY or len(settings.secret_key) < 32
+    ):
+        raise RuntimeError(
+            "SECRET_KEY must be set to a random value of at least 32 characters "
+            "when ENVIRONMENT is not dev"
+        )
 
 
 def resolve_llm_provider(settings: Settings) -> str:

@@ -14,6 +14,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import delete, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.auth import authorize_claimed_user, get_current_user
 from app.core.database import get_db
 from app.core.security import require_token
 from app.memory.models import Memory
@@ -59,12 +60,14 @@ class MemoryStatsOut(BaseModel):
 
 @router.get("/memory-stats", response_model=MemoryStatsOut)
 async def memory_stats(
-    user_id: str = Query(..., min_length=1),
+    user_id: str | None = Query(None),
+    current_user: str = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
     _: None = Depends(require_token),
 ) -> MemoryStatsOut:
     """Return aggregate memory statistics for the dashboard."""
 
+    user_id = authorize_claimed_user(user_id, current_user)
     active_filter = _active_memory_filters(user_id)
 
     total_memories = (
@@ -139,7 +142,8 @@ async def memory_stats(
 
 @router.get("/memories", response_model=list[MemoryOut])
 async def list_memories(
-    user_id: str = Query(..., min_length=1),
+    user_id: str | None = Query(None),
+    current_user: str = Depends(get_current_user),
     session_id: str | None = Query(None, min_length=1),
     db: AsyncSession = Depends(get_db),
 ) -> list[MemoryOut]:
@@ -150,6 +154,7 @@ async def list_memories(
     ordered oldest-first for stable chat command numbering.
     """
 
+    user_id = authorize_claimed_user(user_id, current_user)
     all_filters = list(_active_memory_filters(user_id))
     if session_id is not None:
         try:
@@ -185,12 +190,14 @@ async def list_memories(
 @router.delete("/memories/{memory_id}")
 async def delete_memory(
     memory_id: str,
-    user_id: str = Query(..., min_length=1),
+    user_id: str | None = Query(None),
+    current_user: str = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
     _: None = Depends(require_token),
 ) -> dict:
-    """Delete a memory if it belongs to ``user_id``."""
+    """Delete a memory if it belongs to the authenticated user."""
 
+    user_id = authorize_claimed_user(user_id, current_user)
     try:
         mem_uuid = uuid.UUID(memory_id)
     except ValueError:

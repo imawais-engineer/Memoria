@@ -10,6 +10,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.auth import authorize_claimed_user, get_current_user
 from app.core.database import get_db
 from app.memory.models import Memory
 
@@ -25,7 +26,7 @@ IMPORTANCE_FLOOR = 0.1
 class FeedbackRequest(BaseModel):
     """Thumbs-up/down feedback tied to memories used in a chat reply."""
 
-    user_id: str = Field(..., min_length=1)
+    user_id: str | None = None
     memory_ids: list[str] = Field(default_factory=list)
     rating: Literal["positive", "negative"]
 
@@ -40,10 +41,12 @@ class FeedbackResponse(BaseModel):
 @router.post("/feedback", response_model=FeedbackResponse)
 async def submit_feedback(
     body: FeedbackRequest,
+    current_user: str = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> FeedbackResponse:
     """Adjust memory importance based on user feedback on a chat response."""
 
+    user_id = authorize_claimed_user(body.user_id, current_user)
     if not body.memory_ids:
         return FeedbackResponse(status="ok", updated=0)
 
@@ -56,7 +59,7 @@ async def submit_feedback(
             continue
 
         memory = await db.get(Memory, mem_uuid)
-        if memory is None or memory.user_id != body.user_id:
+        if memory is None or memory.user_id != user_id:
             continue
 
         if body.rating == "positive":

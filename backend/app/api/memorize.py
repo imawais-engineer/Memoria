@@ -9,7 +9,9 @@ from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.dashscope_client import get_embedding
+from app.core.auth import authorize_claimed_user, get_current_user
 from app.core.database import get_db
+from app.services.limits import enforce_limits
 from app.memory.models import Memory
 from app.models.user import User
 
@@ -17,7 +19,7 @@ router = APIRouter(prefix="/api", tags=["memorize"])
 
 
 class MemorizeRequest(BaseModel):
-    user_id: str = Field(..., min_length=1)
+    user_id: str | None = None
     content: str = Field(..., min_length=1)
 
 
@@ -29,12 +31,14 @@ class MemorizeResponse(BaseModel):
 @router.post("/memorize", response_model=MemorizeResponse)
 async def memorize(
     body: MemorizeRequest,
+    current_user: str = Depends(enforce_limits),
     db: AsyncSession = Depends(get_db),
 ) -> MemorizeResponse:
     """Create a core memory directly without LLM processing."""
 
+    user_id = authorize_claimed_user(body.user_id, current_user)
     try:
-        user_uuid = uuid.UUID(body.user_id)
+        user_uuid = uuid.UUID(user_id)
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid user id")
 
@@ -45,7 +49,7 @@ async def memorize(
     content = body.content.strip()
     embedding = await get_embedding(content)
     memory = Memory(
-        user_id=body.user_id,
+        user_id=user_id,
         type="core",
         content=content,
         embedding=embedding,

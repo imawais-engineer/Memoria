@@ -15,3 +15,4 @@ openai  # if using OpenAI-compatible dashscope endpoint
 httpx
 tiktoken  # token counting for retrieval context packing
 greenlet  # required by sqlalchemy.ext.asyncio
+PyJWT

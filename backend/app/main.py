@@ -24,7 +24,7 @@ from app.api.memorize import router as memorize_router
 from app.api.memories import router as memories_router
 from app.api.sessions import router as sessions_router
 from app.api.tasks import router as tasks_router
-from app.config import Settings, get_settings
+from app.config import Settings, get_settings, validate_runtime_settings
 from app.core.database import engine, get_db  # noqa: F401  (exposed for later routes)
 from app.core.llm.dimcheck import check_embedding_dim
 from app.mcp.memory_skill import MEMORY_TOOL_CATALOG
@@ -42,6 +42,7 @@ def create_app() -> FastAPI:
     """Build and configure the FastAPI application instance."""
 
     settings: Settings = get_settings()
+    validate_runtime_settings(settings)
 
     @asynccontextmanager
     async def lifespan(_app: FastAPI) -> AsyncIterator[None]:

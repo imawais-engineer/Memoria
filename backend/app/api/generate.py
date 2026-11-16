@@ -20,7 +20,9 @@ from app.core.dashscope_client import (
 )
 from app.core.database import get_db
 from app.core.redis_client import get_redis
+from app.core.auth import authorize_claimed_user, get_current_user
 from app.core.security import require_token
+from app.services.limits import enforce_limits
 from app.models.generated_asset import GeneratedAsset
 from app.services.usage import (
     USAGE_LIMIT_MESSAGE,
@@ -35,21 +37,21 @@ router = APIRouter(prefix="/api", tags=["generate"])
 
 
 class GenerateImageRequest(BaseModel):
-    user_id: str = Field(..., min_length=1)
+    user_id: str | None = None
     prompt: str = Field(..., min_length=1)
     session_id: str | None = None
     is_memoryless: bool = False
 
 
 class GenerateVideoRequest(BaseModel):
-    user_id: str = Field(..., min_length=1)
+    user_id: str | None = None
     prompt: str = Field(..., min_length=1)
     session_id: str | None = None
     is_memoryless: bool = False
 
 
 class GenerateVoiceRequest(BaseModel):
-    user_id: str = Field(..., min_length=1)
+    user_id: str | None = None
     session_id: str = Field(..., min_length=1)
     prompt: str = Field(..., min_length=1)
     is_memoryless: bool = False
@@ -143,16 +145,18 @@ def _require_media_support(what: str) -> None:
 @router.post("/generate/image", response_model=GenerateUrlResponse)
 async def create_image(
     body: GenerateImageRequest,
+    current_user: str = Depends(enforce_limits),
     db: AsyncSession = Depends(get_db),
 ) -> GenerateUrlResponse:
     _require_media_support("Image generation")
-    allowed = await check_and_increment_usage(db, body.user_id, "image")
+    user_id = authorize_claimed_user(body.user_id, current_user)
+    allowed = await check_and_increment_usage(db, user_id, "image")
     if not allowed:
         raise HTTPException(status_code=429, detail=USAGE_LIMIT_MESSAGE)
 
     session_title = await _bind_media_session(
         db,
-        user_id=body.user_id,
+        user_id=user_id,
         session_id=body.session_id,
         slash_message=f"/imagine {body.prompt}",
         is_memoryless=body.is_memoryless,
@@ -161,11 +165,11 @@ async def create_image(
     try:
         url = await generate_image(body.prompt)
     except Exception as exc:  # noqa: BLE001
-        logger.exception("Image generation failed for user_id=%s", body.user_id)
+        logger.exception("Image generation failed for user_id=%s", user_id)
         raise HTTPException(status_code=500, detail="Image generation failed") from exc
 
     asset = GeneratedAsset(
-        user_id=UUID(body.user_id),
+        user_id=UUID(user_id),
         type="image",
         prompt=body.prompt,
         url=url,
@@ -179,16 +183,18 @@ async def create_image(
 @router.post("/generate/video", response_model=GenerateUrlResponse)
 async def create_video(
     body: GenerateVideoRequest,
+    current_user: str = Depends(enforce_limits),
     db: AsyncSession = Depends(get_db),
 ) -> GenerateUrlResponse:
     _require_media_support("Video generation")
-    allowed = await check_and_increment_usage(db, body.user_id, "video")
+    user_id = authorize_claimed_user(body.user_id, current_user)
+    allowed = await check_and_increment_usage(db, user_id, "video")
     if not allowed:
         raise HTTPException(status_code=429, detail=USAGE_LIMIT_MESSAGE)
 
     session_title = await _bind_media_session(
         db,
-        user_id=body.user_id,
+        user_id=user_id,
         session_id=body.session_id,
         slash_message=f"/gen_video {body.prompt}",
         is_memoryless=body.is_memoryless,
@@ -197,11 +203,11 @@ async def create_video(
     try:
         url = await generate_video(body.prompt)
     except Exception as exc:  # noqa: BLE001
-        logger.exception("Video generation failed for user_id=%s", body.user_id)
+        logger.exception("Video generation failed for user_id=%s", user_id)
         raise HTTPException(status_code=500, detail="Video generation failed") from exc
 
     asset = GeneratedAsset(
-        user_id=UUID(body.user_id),
+        user_id=UUID(user_id),
         type="video",
         prompt=body.prompt,
         url=url,
@@ -215,19 +221,21 @@ async def create_video(
 @router.post("/generate/voice", response_model=GenerateVoiceResponse)
 async def create_voice(
     body: GenerateVoiceRequest,
+    current_user: str = Depends(enforce_limits),
     db: AsyncSession = Depends(get_db),
     redis_client: redis.Redis = Depends(get_redis),
 ) -> GenerateVoiceResponse:
     """Two-step voice overview: Qwen summary of session context, then TTS."""
 
     _require_media_support("Voice generation")
-    allowed = await check_and_increment_usage(db, body.user_id, "audio")
+    user_id = authorize_claimed_user(body.user_id, current_user)
+    allowed = await check_and_increment_usage(db, user_id, "audio")
     if not allowed:
         raise HTTPException(status_code=429, detail=USAGE_LIMIT_MESSAGE)
 
     session_title = await _bind_media_session(
         db,
-        user_id=body.user_id,
+        user_id=user_id,
         session_id=body.session_id,
         slash_message=f"/gen_voice {body.prompt}",
         is_memoryless=body.is_memoryless,
@@ -240,11 +248,11 @@ async def create_voice(
             redis_client=redis_client,
         )
     except Exception as exc:  # noqa: BLE001
-        logger.exception("Voice generation failed for user_id=%s", body.user_id)
+        logger.exception("Voice generation failed for user_id=%s", user_id)
         raise HTTPException(status_code=500, detail="Voice generation failed") from exc
 
     asset = GeneratedAsset(
-        user_id=UUID(body.user_id),
+        user_id=UUID(user_id),
         type="audio",
         prompt=body.prompt,
         url=result["audio_data_uri"],
@@ -257,9 +265,11 @@ async def create_voice(
 
 @router.get("/generate/assets", response_model=AssetsListResponse)
 async def list_assets(
-    user_id: str = Query(..., min_length=1),
+    user_id: str | None = Query(None),
+    current_user: str = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> AssetsListResponse:
+    user_id = authorize_claimed_user(user_id, current_user)
     usage = await get_usage_summary(db, user_id)
     if usage is None:
         raise HTTPException(status_code=404, detail="User not found")
@@ -290,12 +300,14 @@ async def list_assets(
 @router.delete("/generate/assets/{asset_id}")
 async def delete_asset(
     asset_id: str,
-    user_id: str = Query(..., min_length=1),
+    user_id: str | None = Query(None),
+    current_user: str = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
     _: None = Depends(require_token),
 ) -> dict:
-    """Permanently delete a generated asset for the given user."""
+    """Permanently delete a generated asset owned by the authenticated user."""
 
+    user_id = authorize_claimed_user(user_id, current_user)
     try:
         asset_uuid = UUID(asset_id)
         user_uuid = UUID(user_id)

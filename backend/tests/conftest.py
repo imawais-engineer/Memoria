@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import os
 import socket
 import threading
@@ -9,16 +10,40 @@ import time
 from collections.abc import AsyncGenerator
 from types import SimpleNamespace
 
+import httpx
 import pytest
 import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
+from app.core.auth import create_access_token
 from app.core.database import get_db
 from app.main import app
 from app.memory.models import Base
 import app.models as _orm_models  # noqa: F401 — register ORM tables for create_all
+
+
+class UserIdAuth(httpx.Auth):
+    """Mint a real JWT for the ``user_id`` found in the query or JSON body.
+
+    The routes still verify the token. Tests that need another identity (or no
+    identity) pass an explicit ``Authorization`` header, which takes precedence.
+    """
+
+    def auth_flow(self, request: httpx.Request):
+        if "authorization" not in request.headers:
+            user_id = request.url.params.get("user_id")
+            if not user_id and request.content:
+                try:
+                    user_id = json.loads(request.content).get("user_id")
+                except (ValueError, AttributeError):
+                    user_id = None
+            if user_id:
+                request.headers["Authorization"] = (
+                    f"Bearer {create_access_token(str(user_id))}"
+                )
+        yield request
 
 
 TEST_DATABASE_URL = os.getenv(
@@ -60,7 +85,9 @@ async def client(db_session_factory) -> AsyncGenerator[AsyncClient, None]:
 
     app.dependency_overrides[get_db] = override_get_db
     transport = ASGITransport(app=app)
-    async with AsyncClient(transport=transport, base_url="http://test") as ac:
+    async with AsyncClient(
+        transport=transport, base_url="http://test", auth=UserIdAuth()
+    ) as ac:
         yield ac
     app.dependency_overrides.clear()
 
