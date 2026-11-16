@@ -67,7 +67,17 @@ backend lives under `backend/`:
 - Beat: `celery -A celery_app beat --loglevel=info`.
 - Put secrets in repo-root `.env` for workers started in separate shells.
 
-### DashScope / Qwen (`app/core/dashscope_client.py`)
+### LLM provider layer (`app/core/llm/`, facade `app/core/dashscope_client.py`)
+
+- Any OpenAI-compatible API: set `LLM_BASE_URL`, `LLM_API_KEY`, `LLM_CHAT_MODEL`
+  (see `docs/LLM_PROVIDERS.md`). Without `LLM_BASE_URL` DashScope is used.
+- Keep importing `call_qwen_chat`, `stream_qwen_chat`, `get_embedding` etc. from
+  `app.core.dashscope_client`; tests patch those names.
+- Tests use `backend/tests/mock_openai_server.py` (fixture `mock_llm_server`).
+  Never put API keys in files; read from env only.
+- Embedding size is `EMBEDDING_DIM` (default 1024); see `docs/EMBEDDINGS.md`.
+
+### DashScope / Qwen (`app/core/llm/dashscope_provider.py`)
 
 - Set `DASHSCOPE_API_KEY` and `DASHSCOPE_BASE_URL` for international region
   (e.g. `https://dashscope-intl.aliyuncs.com/api/v1`).

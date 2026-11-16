@@ -63,6 +63,8 @@ cd Memoria
 cp .env.example .env
 # edit .env — set DASHSCOPE_API_KEY (and DASHSCOPE_BASE_URL if using the
 # international DashScope endpoint, e.g. https://dashscope-intl.aliyuncs.com/api/v1)
+# Or use any OpenAI-compatible API instead: set LLM_BASE_URL, LLM_API_KEY and
+# LLM_CHAT_MODEL (see docs/LLM_PROVIDERS.md). Image/video/voice need DashScope.
 ```
 
 See [`.env.example`](.env.example) for all supported variables (`DATABASE_URL`, `REDIS_URL`, `SECRET_KEY`, `DEMO_API_TOKEN`, etc.).
@@ -205,7 +207,7 @@ The script signs up a test user, exercises chat/memory, Personal Intelligence to
 | Layer | Technology |
 |---|---|
 | API | FastAPI (async), Uvicorn |
-| LLM | Qwen via DashScope (`qwen-plus`, `qwen-max`, `text-embedding-v3`) |
+| LLM | Any OpenAI-compatible API (`LLM_BASE_URL`), or Qwen via DashScope (`qwen-plus`, `qwen-max`, `text-embedding-v3`). See [docs/LLM_PROVIDERS.md](docs/LLM_PROVIDERS.md) |
 | Vector store | PostgreSQL 16 + pgvector |
 | Cache / sessions | Redis |
 | Background jobs | Celery + Celery Beat |

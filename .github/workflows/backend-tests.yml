@@ -60,7 +60,23 @@ jobs:
           PGPASSWORD: memoria
         run: psql -h localhost -U memoria -d memoria -c "CREATE EXTENSION IF NOT EXISTS vector"
 
-      - name: Run tests
+      - name: Apply migrations (alembic upgrade head)
+        working-directory: backend
+        env:
+          DATABASE_URL: postgresql+asyncpg://memoria:memoria@localhost:5432/memoria
+        run: |
+          alembic upgrade head
+          test "$(alembic heads | wc -l)" -eq 1
+
+      - name: Decay SQL tests against migrated schema
+        working-directory: backend
+        run: pytest -q -rs tests/test_decay_sql_db.py
+
+      - name: Mock OpenAI-compatible provider tests
+        working-directory: backend
+        run: pytest -q -rs tests/test_llm_providers.py tests/test_live_openai_compat.py
+
+      - name: Run full test suite
         working-directory: backend
         run: pytest -q -rs
 
