@@ -109,7 +109,7 @@ Requires Python 3.12, Node 18+, PostgreSQL 16 with the `pgvector` extension, and
 # Backend
 cd backend
 python -m venv .venv && source .venv/bin/activate
-pip install -r requirements.txt
+pip install -r requirements.txt   # use requirements-dev.txt to also get pytest
 alembic upgrade head
 uvicorn app.main:app --reload           # http://localhost:8000
 

@@ -14,5 +14,4 @@ alembic
 openai  # if using OpenAI-compatible dashscope endpoint
 httpx
 tiktoken  # token counting for retrieval context packing
-pytest
-pytest-asyncio
+greenlet  # required by sqlalchemy.ext.asyncio

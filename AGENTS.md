@@ -22,7 +22,8 @@ backend lives under `backend/`:
 ### Running the backend (dev)
 
 - The update script installs `backend/requirements.txt`. If running by hand,
-  create a venv and `pip install -r backend/requirements.txt` (needs the
+  create a venv and `pip install -r backend/requirements-dev.txt` (runtime
+  deps plus pytest; use `scripts/requirements.txt` for the benchmark; needs the
   `python3.12-venv` system package for `python3 -m venv`).
 - Start the dev server **from the `backend/` directory** so the `app` package
   imports resolve: `uvicorn app.main:app --reload --port 8000`.
