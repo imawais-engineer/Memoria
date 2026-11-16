@@ -40,7 +40,7 @@ graph TD
         BEAT["Celery Beat<br/>scheduler"]
         W_INGEST["Ingestion Worker<br/>extract_and_store_memories"]
         W_DECAY["Decay Worker<br/>apply_decay · daily 03:00 UTC"]
-        W_CONSOL["Consolidation Worker<br/>consolidate_memories · weekly Sat 04:00 UTC"]
+        W_CONSOL["Consolidation Worker<br/>consolidate_memories · weekly Sun 04:00 UTC"]
     end
 
     %% ── Storage ──────────────────────────────────────────────────────────
@@ -212,3 +212,11 @@ locally). When updating containers, use `docker compose down && docker compose
 up -d` **without** `-v`. **Never run `docker compose down -v`** — it deletes
 volumes and wipes all memories, chats, and generated media. After restart, run
 `alembic upgrade head` to apply migrations without losing data.
+
+## Known limitations
+
+- **Client-supplied `user_id`.** Chat and session endpoints trust the `user_id`
+  sent by the client. There is no per-user session token, so a caller who knows
+  another user's id can act as that user. Issuing signed JWTs at login and
+  deriving the user from the token is recommended future work; it is not
+  implemented.

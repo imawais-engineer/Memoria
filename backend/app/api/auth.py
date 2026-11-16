@@ -13,6 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.dashscope_client import ALLOWED_CHAT_MODELS, DEFAULT_CHAT_MODEL
 from app.core.database import get_db
+from app.core.security import hash_secret, is_hashed, verify_secret
 from app.models.user import User
 from app.schemas.persona import normalize_persona
 
@@ -156,7 +157,7 @@ async def signup(
         username=body.username,
         first_name=body.first_name,
         last_name=body.last_name,
-        favorite_book=body.favorite_book,
+        favorite_book=hash_secret(body.favorite_book),
     )
     db.add(user)
     try:
@@ -179,8 +180,14 @@ async def login(
     user = (
         await db.execute(select(User).where(User.username == body.username))
     ).scalar_one_or_none()
-    if user is None or user.favorite_book != body.favorite_book:
+    if user is None or not verify_secret(body.favorite_book, user.favorite_book):
         raise HTTPException(status_code=401, detail="Invalid username or favorite book")
+
+    if not is_hashed(user.favorite_book):
+        # Legacy plaintext row: upgrade to a salted hash after a successful login.
+        user.favorite_book = hash_secret(body.favorite_book)
+        await db.commit()
+        await db.refresh(user)
 
     return _user_to_auth(user)
 

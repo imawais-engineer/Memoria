@@ -8,6 +8,7 @@ threshold. Core memories (``decay_rate=0``) are never decayed or archived.
 from __future__ import annotations
 
 import logging
+import math
 
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -17,12 +18,32 @@ logger = logging.getLogger(__name__)
 # Memories with importance below this are archived (soft-deleted).
 ARCHIVE_THRESHOLD = 0.1
 
+
+
+def decayed_importance(
+    importance: float, decay_rate: float, elapsed_days: float
+) -> float:
+    """Return importance after ``elapsed_days`` of exponential decay.
+
+    Mirrors ``_DECAY_SQL``: ``importance * exp(-decay_rate * elapsed_days)``,
+    where elapsed time is measured since the last decay run (or creation).
+    """
+
+    return importance * math.exp(-decay_rate * max(elapsed_days, 0.0))
+
+
+# Decay only the time elapsed since the previous run (``last_decayed_at``, or
+# ``created_at`` for never-decayed rows) so repeated daily runs do not compound.
 _DECAY_SQL = text(
     """
     UPDATE memories
     SET importance = importance * EXP(
-        -decay_rate * (EXTRACT(EPOCH FROM (NOW() - created_at)) / 86400.0)
-    )
+        -decay_rate * (
+            EXTRACT(EPOCH FROM (NOW() - COALESCE(last_decayed_at, created_at)))
+            / 86400.0
+        )
+    ),
+    last_decayed_at = NOW()
     WHERE type <> 'core' AND archived = false
     """
 )

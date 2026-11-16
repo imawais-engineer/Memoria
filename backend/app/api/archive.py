@@ -10,7 +10,7 @@ from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.memories import require_token
+from app.core.security import require_token
 from app.core.database import get_db
 from app.models.chat_message import ChatMessage
 from app.models.chat_session import ChatSession

@@ -17,6 +17,10 @@ COPY celery_app ./celery_app
 COPY alembic ./alembic
 COPY alembic.ini ./alembic.ini
 
+# Run as an unprivileged user.
+RUN useradd --create-home --uid 10001 appuser && chown -R appuser:appuser /app
+USER appuser
+
 EXPOSE 8000
 
 # Production run (no --reload). Override the command to run a Celery worker:

@@ -9,13 +9,13 @@ from __future__ import annotations
 import uuid
 from datetime import datetime
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 from sqlalchemy import delete, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.config import get_settings
 from app.core.database import get_db
+from app.core.security import require_token
 from app.memory.models import Memory
 from app.models.chat_session import ChatSession
 
@@ -55,13 +55,6 @@ class MemoryStatsOut(BaseModel):
     avg_importance: float
     last_consolidation: datetime | None
     types: dict[str, int] = Field(default_factory=dict)
-
-
-def require_token(x_api_token: str = Header(default="")) -> None:
-    """Simple fixed-token auth for destructive endpoints (demo only)."""
-
-    if x_api_token != get_settings().demo_api_token:
-        raise HTTPException(status_code=401, detail="Invalid or missing API token")
 
 
 @router.get("/memory-stats", response_model=MemoryStatsOut)
