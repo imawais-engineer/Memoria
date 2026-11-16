@@ -9,9 +9,10 @@ from __future__ import annotations
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
+import hmac
 import time
 
-from fastapi import FastAPI, Request, Response
+from fastapi import FastAPI, HTTPException, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
@@ -26,7 +27,7 @@ from app.api.memorize import router as memorize_router
 from app.api.memories import router as memories_router
 from app.api.sessions import router as sessions_router
 from app.api.tasks import router as tasks_router
-from app.config import Settings, get_settings, validate_runtime_settings
+from app.config import Settings, get_settings, is_dev, validate_runtime_settings
 from app.core.database import engine, get_db  # noqa: F401  (exposed for later routes)
 from app.core.llm.dimcheck import check_embedding_dim
 from app.core import observability
@@ -40,6 +41,10 @@ class HealthResponse(BaseModel):
     status: str
     service: str
     version: str
+
+
+READY_CACHE_SECONDS = 2.0
+_ready_cache: dict[str, tuple[float, dict[str, str]]] = {}
 
 
 def create_app() -> FastAPI:
@@ -99,17 +104,39 @@ def create_app() -> FastAPI:
 
     @application.get("/health/ready", tags=["system"])
     async def health_ready(response: Response) -> dict[str, object]:
-        """Readiness probe: ``200`` only when Postgres and Redis both respond."""
+        """Readiness probe: ``200`` only when Postgres and Redis both respond.
 
-        checks = await observability.run_readiness_checks()
+        The result is cached briefly so anonymous callers cannot turn the probe
+        into a load generator against Postgres and Redis.
+        """
+
+        now = time.monotonic()
+        cached = _ready_cache.get("v")
+        if cached and now - cached[0] < READY_CACHE_SECONDS:
+            checks = cached[1]
+        else:
+            checks = await observability.run_readiness_checks()
+            _ready_cache["v"] = (now, checks)
         ready = all(v == "ok" for v in checks.values())
         if not ready:
             response.status_code = 503
         return {"status": "ready" if ready else "unavailable", "checks": checks}
 
     @application.get("/metrics", tags=["system"], include_in_schema=False)
-    async def metrics_endpoint() -> Response:
-        """Prometheus text exposition. Restrict at the proxy/security group."""
+    async def metrics_endpoint(request: Request) -> Response:
+        """Prometheus text exposition, guarded by ``METRICS_TOKEN``."""
+
+        settings = get_settings()
+        if settings.metrics_token:
+            supplied = request.headers.get("authorization", "")
+            if not hmac.compare_digest(
+                supplied.encode(), f"Bearer {settings.metrics_token}".encode()
+            ):
+                raise HTTPException(status_code=401, detail="Metrics token required")
+        elif not is_dev(settings):
+            raise HTTPException(
+                status_code=403, detail="Set METRICS_TOKEN to enable /metrics"
+            )
 
         return Response(
             observability.metrics.render(),

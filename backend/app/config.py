@@ -68,8 +68,12 @@ class Settings(BaseSettings):
     secret_key: str = "supersecret"
     # Fixed token guarding destructive demo endpoints (e.g. DELETE /api/memories).
     demo_api_token: str = "memoria-demo-token"
-    # ``dev`` or ``production``. Outside dev the default SECRET_KEY is refused.
-    environment: str = "dev"
+    # ``dev`` or ``production``. Fails closed: unless ENVIRONMENT=dev is set
+    # explicitly, the default or a short SECRET_KEY is refused at startup.
+    environment: str = "production"
+    # Bearer token required by /metrics. Empty: /metrics is open in dev and
+    # returns 403 elsewhere.
+    metrics_token: str = ""
     # Access token lifetime for JWTs issued by /auth/login and /auth/signup.
     access_token_ttl_minutes: int = 60 * 24
     # Enforce the legacy X-API-Token guard on destructive routes. Empty means

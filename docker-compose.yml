@@ -13,8 +13,8 @@
 x-backend-env: &backend-env
   DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-user}:${POSTGRES_PASSWORD:-pass}@db:5432/memoria
   REDIS_URL: redis://redis:6379/0
-  ENVIRONMENT: ${ENVIRONMENT:-dev}
-  SECRET_KEY: ${SECRET_KEY:-change-me-in-production}
+  ENVIRONMENT: ${ENVIRONMENT:-production}
+  SECRET_KEY: ${SECRET_KEY:?set SECRET_KEY (32+ random chars), or ENVIRONMENT=dev with a dev key}
   DASHSCOPE_API_KEY: ${DASHSCOPE_API_KEY:-}
   DASHSCOPE_BASE_URL: ${DASHSCOPE_BASE_URL:-}
   LLM_PROVIDER: ${LLM_PROVIDER:-}

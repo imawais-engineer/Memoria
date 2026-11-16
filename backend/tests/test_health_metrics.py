@@ -11,6 +11,9 @@ from app.main import app
 
 @pytest.fixture
 def client():
+    import app.main as main_module
+
+    main_module._ready_cache.clear()
     return TestClient(app)
 
 
@@ -57,3 +60,34 @@ def test_metrics_text_format(client):
     assert "# TYPE memoria_http_requests_total counter" in r.text
     assert 'memoria_http_requests_total{method="GET",path="/health",status="200"}' in r.text
     assert "memoria_uptime_seconds" in r.text
+
+
+def test_ready_is_cached_between_calls(client, monkeypatch):
+    calls = {"n": 0}
+
+    async def fake() -> dict[str, str]:
+        calls["n"] += 1
+        return {"database": "ok", "redis": "ok"}
+
+    monkeypatch.setattr(observability, "run_readiness_checks", fake)
+    assert client.get("/health/ready").status_code == 200
+    assert client.get("/health/ready").status_code == 200
+    assert calls["n"] == 1
+
+
+def test_metrics_requires_token_when_configured(client, monkeypatch):
+    from app.config import get_settings
+
+    monkeypatch.setattr(get_settings(), "metrics_token", "s3cret-token")
+    assert client.get("/metrics").status_code == 401
+    assert client.get("/metrics", headers={"Authorization": "Bearer nope"}).status_code == 401
+    ok = client.get("/metrics", headers={"Authorization": "Bearer s3cret-token"})
+    assert ok.status_code == 200
+
+
+def test_metrics_closed_outside_dev_without_token(client, monkeypatch):
+    from app.config import get_settings
+
+    monkeypatch.setattr(get_settings(), "environment", "production")
+    monkeypatch.setattr(get_settings(), "metrics_token", "")
+    assert client.get("/metrics").status_code == 403

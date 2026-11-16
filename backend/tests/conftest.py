@@ -17,6 +17,8 @@ from httpx import ASGITransport, AsyncClient
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
+os.environ.setdefault("ENVIRONMENT", "dev")
+
 from app.core.auth import create_access_token
 from app.core.database import get_db
 from app.main import app
