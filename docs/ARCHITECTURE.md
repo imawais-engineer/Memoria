@@ -177,7 +177,8 @@ safety, and coherence than memory-less baselines.
    `summary` and `key_themes`); originals are marked `is_consolidated` and
    linked via `parent_id`.
 5. **Decay** — daily, non-core memories lose importance exponentially; those
-   falling below the archive threshold are soft-deleted.
+   falling below the archive threshold are soft-deleted. Each run decays only
+   the time since `last_decayed_at`, so repeated runs do not compound.
 
 ## Components reference
 
@@ -212,6 +213,15 @@ locally). When updating containers, use `docker compose down && docker compose
 up -d` **without** `-v`. **Never run `docker compose down -v`** — it deletes
 volumes and wipes all memories, chats, and generated media. After restart, run
 `alembic upgrade head` to apply migrations without losing data.
+
+## Testing and CI
+
+Unit tests for decay math, the Celery schedule, retrieval packing, ingestion
+parsing, consolidation clustering and security helpers run without external
+services. API tests need Postgres + pgvector and skip when it is unreachable.
+`.github/workflows/backend-tests.yml` runs the full suite against pgvector and
+Redis services. Soft passwords are stored as scrypt hashes and destructive
+endpoints share the `require_token` guard in `app/core/security.py`.
 
 ## Known limitations
 

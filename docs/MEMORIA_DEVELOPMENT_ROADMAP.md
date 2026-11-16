@@ -14,6 +14,21 @@ You will work inside a single project folder (e.g., `memoria/`) and paste the pr
 
 ---
 
+## Status
+
+| Module | Status | Where |
+|---|---|---|
+| 1. Scaffold & environment | Implemented | `backend/`, `docker-compose.yml`, `.env.example` |
+| 2. Database models & schema | Implemented | `backend/app/memory/models.py`, `backend/app/models/`, `backend/alembic/` |
+| 3. Ingestion pipeline | Implemented | `backend/app/memory/ingestion.py` |
+| 4. Retrieval & context packing | Implemented | `backend/app/memory/retrieval.py` |
+| 5. Forgetting & consolidation | Implemented | `backend/app/memory/forgetting.py`, `consolidation.py`, `backend/celery_app/` |
+| 6. Core chat agent API | Implemented | `backend/app/api/chat.py`, `backend/app/services/agent_service.py` |
+| 7. Session management | Implemented | `backend/app/api/sessions.py`; session logic lives in `agent_service.py`, not a separate `session_manager.py` |
+| 8. Dashboard (frontend) | Implemented | `frontend/` |
+| 9. Deployment | Implemented | `backend/Dockerfile`, `docker-compose.yml`, `infrastructure/` |
+| 10. Testing, benchmarking, docs | Implemented | `backend/tests/` (unit + DB-backed), `.github/workflows/backend-tests.yml`, `scripts/benchmark.py`, `docs/` |
+
 ## Table of Contents
 
 1. [Module 1: Project Scaffold & Environment Setup](#module-1-project-scaffold--environment-setup)
