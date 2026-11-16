@@ -59,6 +59,10 @@ class Settings(BaseSettings):
     llm_timeout_seconds: float = 120.0
     # Expected embedding vector length. Must match the pgvector column.
     embedding_dim: int = 1024
+    # Per-day importance decay by memory kind (core memories never decay).
+    decay_rate_fact: float = 0.005
+    decay_rate_event: float = 0.03
+    decay_rate_preference: float = 0.01
     database_url: str = "postgresql+asyncpg://user:pass@localhost/memoria"
     redis_url: str = "redis://localhost:6379/0"
     secret_key: str = "supersecret"

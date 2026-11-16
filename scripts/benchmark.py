@@ -17,8 +17,6 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-import matplotlib.pyplot as plt
-
 # Allow imports from the backend package when run from repo root or backend/.
 BACKEND_DIR = Path(__file__).resolve().parent.parent / "backend"
 if str(BACKEND_DIR) not in sys.path:
@@ -29,6 +27,7 @@ from sqlalchemy import delete
 from app.core.dashscope_client import call_qwen_chat, get_embedding
 from app.core.database import async_session, engine
 from app.memory.models import Memory
+from app.memory.recall_benchmark import run_recall_cases
 from app.memory.retrieval import retrieve_context
 
 logging.basicConfig(
@@ -389,6 +388,8 @@ def format_markdown_table(rows: list[dict[str, Any]], avg_improvement: float) ->
 def save_chart(rows: list[dict[str, Any]]) -> None:
     """Generate a grouped bar chart comparing average before/after scores."""
 
+    import matplotlib.pyplot as plt  # lazy: not needed for --offline
+
     if not rows:
         logger.warning("No successful scenarios to chart.")
         return
@@ -502,7 +503,28 @@ async def run_benchmark() -> dict[str, Any]:
     return payload
 
 
+async def run_offline_recall() -> dict[str, Any]:
+    """Run the DB-free recall cases using the configured embedding provider.
+
+    Point LLM_BASE_URL at the mock server (backend/tests/mock_openai_server.py)
+    for a fully offline run. Mock embeddings are deterministic but not
+    semantic, so queries are the exact memory text.
+    """
+
+    async def embed(text: str) -> list[float]:
+        return await get_embedding(text)
+
+    report = await run_recall_cases(embed, exact_queries=True)
+    for case in report["cases"]:
+        print(f"{'PASS' if case['passed'] else 'FAIL'} {case['case']}: {case['ranking']}")
+    print(f"recall@1 = {report['recall_at_1']:.2f} ({report['passed']}/{report['total']})")
+    return report
+
+
 async def main() -> None:
+    if "--offline" in sys.argv:
+        report = await run_offline_recall()
+        sys.exit(0 if report["passed"] == report["total"] else 1)
     try:
         payload = await run_benchmark()
         print(

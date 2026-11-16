@@ -17,7 +17,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.auth import authorize_claimed_user, get_current_user
 from app.core.database import get_db
 from app.core.security import require_token
+from app.memory.conflict_detection import get_memory_history
 from app.memory.models import Memory
+from app.memory.retrieval import retrieve_with_why
 from app.models.chat_session import ChatSession
 
 router = APIRouter(prefix="/api", tags=["memories"])
@@ -32,6 +34,9 @@ class MemoryOut(BaseModel):
     created_at: datetime | None
     decay_rate: float
     session_id: str | None = None
+    kind: str = "fact"
+    superseded: bool = False
+    superseded_by: str | None = None
 
 
 def _active_memory_filters(user_id: str) -> tuple:
@@ -182,6 +187,55 @@ async def list_memories(
             created_at=m.created_at,
             decay_rate=m.decay_rate,
             session_id=str(m.session_id) if m.session_id else None,
+            kind=m.kind,
+        )
+        for m in rows
+    ]
+
+
+@router.get("/memories/recall")
+async def recall_memories(
+    query: str = Query(..., min_length=1),
+    user_id: str | None = Query(None),
+    include_superseded: bool = Query(False),
+    current_user: str = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> list[dict]:
+    """Recall memories for ``query``; each item carries a ``why`` breakdown."""
+
+    user_id = authorize_claimed_user(user_id, current_user)
+    return await retrieve_with_why(
+        user_id, query, db_session=db, include_superseded=include_superseded
+    )
+
+
+@router.get("/memories/{memory_id}/history", response_model=list[MemoryOut])
+async def memory_history(
+    memory_id: str,
+    user_id: str | None = Query(None),
+    current_user: str = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> list[MemoryOut]:
+    """Return the supersede history (oldest first) for a memory."""
+
+    user_id = authorize_claimed_user(user_id, current_user)
+    try:
+        mem_uuid = uuid.UUID(memory_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid memory id")
+    rows = await get_memory_history(db, user_id, mem_uuid)
+    return [
+        MemoryOut(
+            id=str(m.id),
+            type=m.type,
+            content=m.content,
+            importance=m.importance,
+            created_at=m.created_at,
+            decay_rate=m.decay_rate,
+            session_id=str(m.session_id) if m.session_id else None,
+            kind=m.kind,
+            superseded=bool(m.superseded),
+            superseded_by=str(m.superseded_by) if m.superseded_by else None,
         )
         for m in rows
     ]

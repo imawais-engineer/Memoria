@@ -7,9 +7,8 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from app.memory import ingestion
+from app.memory.quality import decay_rate_for, kind_decay_rates
 from app.memory.ingestion import (
-    DECAY_RATES,
-    DEFAULT_DECAY_RATE,
     _extract_tool_arguments,
     extract_and_store_memories,
 )
@@ -44,9 +43,9 @@ def test_bad_inputs_return_none():
 
 
 def test_decay_rates_by_type():
-    assert DECAY_RATES["core"] == 0.0
-    assert DECAY_RATES["episodic"] > DECAY_RATES["semantic"] > DECAY_RATES["procedural"]
-    assert DEFAULT_DECAY_RATE == 0.01
+    rates = kind_decay_rates()
+    assert decay_rate_for("fact", "core") == 0.0
+    assert rates["event"] > rates["preference"] > rates["fact"]
 
 
 def _db():
@@ -74,7 +73,7 @@ async def test_store_assigns_decay_rate_by_type(monkeypatch):
 
     created = await extract_and_store_memories("text", "u1", "m1", db)
 
-    assert [m.decay_rate for m in created] == [0.0, DECAY_RATES["episodic"], DEFAULT_DECAY_RATE]
+    assert [m.decay_rate for m in created] == [0.0, kind_decay_rates()["event"], kind_decay_rates()["fact"]]
     assert created[0].expires_at is None
     assert created[1].expires_at is not None
     db.commit.assert_awaited_once()

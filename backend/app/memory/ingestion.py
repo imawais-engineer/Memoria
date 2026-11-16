@@ -21,6 +21,7 @@ from app.core.dashscope_client import (
 )
 from app.memory.conflict_detection import detect_conflicts, resolve_conflict
 from app.memory.models import Memory
+from app.memory.quality import KINDS, decay_rate_for, decide_supersede, normalize_kind
 from app.models.chat_session import ChatSession  # noqa: F401  (register FK table)
 
 logger = logging.getLogger(__name__)
@@ -39,16 +40,7 @@ SYSTEM_PROMPT = (
     "facts are found, return an empty memories list."
 )
 
-# Decay rate applied per memory type (core memories never decay).
-DECAY_RATES: dict[str, float] = {
-    "core": 0.0,
-    "semantic": 0.01,
-    "episodic": 0.02,
-    "procedural": 0.005,
-    "goal": 0.01,
-    "preference": 0.01,
-}
-DEFAULT_DECAY_RATE = 0.01
+# Decay rates come from app.memory.quality (per kind, configurable in settings).
 CONFLICT_IMPORTANCE_BOOST = 0.1
 AUTO_CONFLICT_RESOLUTION = "auto_superseded_on_ingestion"
 
@@ -84,6 +76,14 @@ EXTRACT_MEMORIES_TOOL: list[dict[str, Any]] = [
                                         "goal",
                                         "preference",
                                     ],
+                                },
+                                "kind": {
+                                    "type": "string",
+                                    "enum": list(KINDS),
+                                    "description": (
+                                        "fact (stable truth), event (something "
+                                        "that happened) or preference (likes/dislikes)."
+                                    ),
                                 },
                                 "importance": {
                                     "type": "number",
@@ -215,7 +215,8 @@ async def extract_and_store_memories(
 
             embedding = await get_embedding(content, model=EMBEDDING_MODEL)
 
-            decay_rate = DECAY_RATES.get(mem_type, DEFAULT_DECAY_RATE)
+            kind = normalize_kind(item.get("kind"), mem_type)
+            decay_rate = decay_rate_for(kind, mem_type)
             now = datetime.now(timezone.utc)
             expires_at = (
                 now + timedelta(hours=expires_in_hours)
@@ -226,6 +227,7 @@ async def extract_and_store_memories(
             memory = Memory(
                 user_id=user_id,
                 type=mem_type,
+                kind=kind,
                 content=content,
                 embedding=embedding,
                 importance=importance,
@@ -255,6 +257,14 @@ async def extract_and_store_memories(
                 )
                 memory.importance = min(1.0, importance + CONFLICT_IMPORTANCE_BOOST)
                 for conflict in conflicts:
+                    if not decide_supersede(
+                        conflict.created_at,
+                        memory.created_at,
+                        contradicts=True,
+                        old_kind=conflict.kind,
+                        new_kind=kind,
+                    ):
+                        continue
                     await resolve_conflict(
                         db_session,
                         str(conflict.id),
