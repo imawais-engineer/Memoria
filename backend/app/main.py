@@ -9,7 +9,9 @@ from __future__ import annotations
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+import time
+
+from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
@@ -27,6 +29,7 @@ from app.api.tasks import router as tasks_router
 from app.config import Settings, get_settings, validate_runtime_settings
 from app.core.database import engine, get_db  # noqa: F401  (exposed for later routes)
 from app.core.llm.dimcheck import check_embedding_dim
+from app.core import observability
 from app.mcp.memory_skill import MEMORY_TOOL_CATALOG
 from app.mcp.server import mount_mcp
 
@@ -77,6 +80,41 @@ def create_app() -> FastAPI:
 
         _ = settings  # configuration is loaded/validated at startup
         return HealthResponse(status="ok", service="memoria", version=__version__)
+
+    @application.middleware("http")
+    async def record_metrics(request: Request, call_next):  # type: ignore[no-untyped-def]
+        start = time.perf_counter()
+        status = 500
+        try:
+            response = await call_next(request)
+            status = response.status_code
+            return response
+        finally:
+            route = request.scope.get("route")
+            # Use the route template to keep label cardinality bounded.
+            path = getattr(route, "path", None) or "unmatched"
+            observability.metrics.observe(
+                request.method, path, status, time.perf_counter() - start
+            )
+
+    @application.get("/health/ready", tags=["system"])
+    async def health_ready(response: Response) -> dict[str, object]:
+        """Readiness probe: ``200`` only when Postgres and Redis both respond."""
+
+        checks = await observability.run_readiness_checks()
+        ready = all(v == "ok" for v in checks.values())
+        if not ready:
+            response.status_code = 503
+        return {"status": "ready" if ready else "unavailable", "checks": checks}
+
+    @application.get("/metrics", tags=["system"], include_in_schema=False)
+    async def metrics_endpoint() -> Response:
+        """Prometheus text exposition. Restrict at the proxy/security group."""
+
+        return Response(
+            observability.metrics.render(),
+            media_type="text/plain; version=0.0.4; charset=utf-8",
+        )
 
     @application.get("/mcp/memory-skills", tags=["mcp"])
     async def memory_skills() -> dict[str, list[dict[str, str]]]:
