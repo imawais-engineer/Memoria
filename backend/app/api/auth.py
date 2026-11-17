@@ -14,6 +14,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.dashscope_client import ALLOWED_CHAT_MODELS, DEFAULT_CHAT_MODEL
+from app.core.auth import authorize_claimed_user, create_access_token, get_current_user
 from app.core.database import get_db
 from app.core.security import check_login_secret, hash_secret, is_hashed
 from app.models.user import User
@@ -64,6 +65,8 @@ class PersonaOut(BaseModel):
 
 class AuthResponse(BaseModel):
     user_id: str
+    access_token: str = ""
+    token_type: str = "bearer"
     username: str
     first_name: str = ""
     last_name: str = ""
@@ -73,7 +76,7 @@ class AuthResponse(BaseModel):
 
 
 class PreferencesRequest(BaseModel):
-    user_id: str = Field(..., min_length=1)
+    user_id: str | None = None
     global_memory_enabled: bool | None = None
     default_chat_model: str | None = None
     persona: PersonaIn | None = None
@@ -125,6 +128,7 @@ def _persona_out(persona: dict | None) -> PersonaOut:
 def _user_to_auth(user: User) -> AuthResponse:
     return AuthResponse(
         user_id=str(user.id),
+        access_token=create_access_token(str(user.id)),
         username=user.username,
         first_name=user.first_name or "",
         last_name=user.last_name or "",
@@ -206,23 +210,25 @@ async def login(
 
 @router.get("/preferences", response_model=UserPreferencesOut)
 async def get_preferences(
-    user_id: str = Query(..., min_length=1),
+    user_id: str | None = Query(None),
+    current_user: str = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> UserPreferencesOut:
     """Return the user's preferences, including persona settings."""
 
-    user = await _get_user_or_404(user_id, db)
+    user = await _get_user_or_404(authorize_claimed_user(user_id, current_user), db)
     return _user_to_preferences(user)
 
 
 @router.patch("/preferences", response_model=UserPreferencesOut)
 async def update_preferences(
     body: PreferencesRequest,
+    current_user: str = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> UserPreferencesOut:
     """Update Personal Intelligence and/or persona settings."""
 
-    user = await _get_user_or_404(body.user_id, db)
+    user = await _get_user_or_404(authorize_claimed_user(body.user_id, current_user), db)
     if body.global_memory_enabled is not None:
         user.global_memory_enabled = body.global_memory_enabled
     if body.default_chat_model is not None:

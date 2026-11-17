@@ -15,9 +15,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 logger = logging.getLogger(__name__)
 
+from app.memory.quality import decay_rate_for, kind_decay_rates  # noqa: F401
+
 # Memories with importance below this are archived (soft-deleted).
 ARCHIVE_THRESHOLD = 0.1
-
 
 
 def decayed_importance(
@@ -30,6 +31,14 @@ def decayed_importance(
     """
 
     return importance * math.exp(-decay_rate * max(elapsed_days, 0.0))
+
+
+def decayed_importance_for_kind(
+    importance: float, kind: str | None, elapsed_days: float, mem_type: str | None = None
+) -> float:
+    """Decay ``importance`` using the rate configured for ``kind``."""
+
+    return decayed_importance(importance, decay_rate_for(kind, mem_type), elapsed_days)
 
 
 # Decay only the time elapsed since the previous run (``last_decayed_at``, or

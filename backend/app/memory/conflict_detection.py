@@ -183,3 +183,52 @@ async def resolve_conflict(
             "resolve_conflict failed old=%s new=%s", old_memory_id, new_memory_id
         )
         return False
+
+
+async def get_memory_history(
+    db_session: AsyncSession, user_id: str, memory_id: uuid.UUID, *, max_depth: int = 50
+) -> list[Memory]:
+    """Return the supersede chain containing ``memory_id``, oldest first.
+
+    Walks back through memories that were superseded by the chain and forward
+    through ``superseded_by``. Rows are scoped to ``user_id``; nothing is
+    deleted when a fact is superseded, so the full history stays available.
+    """
+
+    start = await db_session.get(Memory, memory_id)
+    if start is None or start.user_id != user_id:
+        return []
+
+    chain: list[Memory] = [start]
+    seen = {start.id}
+
+    # Forward: newer versions.
+    current = start
+    while current.superseded_by and len(chain) < max_depth:
+        nxt = await db_session.get(Memory, current.superseded_by)
+        if nxt is None or nxt.user_id != user_id or nxt.id in seen:
+            break
+        chain.append(nxt)
+        seen.add(nxt.id)
+        current = nxt
+
+    # Backward: older versions superseded by the head of the chain.
+    frontier = [start.id]
+    while frontier and len(chain) < max_depth:
+        rows = (
+            await db_session.execute(
+                select(Memory).where(
+                    Memory.user_id == user_id,
+                    Memory.superseded_by.in_(frontier),
+                )
+            )
+        ).scalars().all()
+        frontier = []
+        for row in rows:
+            if row.id not in seen:
+                seen.add(row.id)
+                chain.append(row)
+                frontier.append(row.id)
+
+    chain.sort(key=lambda m: m.created_at.timestamp() if m.created_at else 0.0)
+    return chain

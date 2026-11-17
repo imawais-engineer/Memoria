@@ -12,6 +12,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import exists, func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.auth import authorize_claimed_user, get_current_user
 from app.core.database import get_db
 from app.core.redis_client import get_redis
 from app.memory.models import Memory
@@ -27,7 +28,7 @@ MAX_TITLE_LENGTH = 80
 
 
 class CreateSessionRequest(BaseModel):
-    user_id: str = Field(..., min_length=1)
+    user_id: str | None = None
     is_memoryless: bool = False
 
 
@@ -54,7 +55,12 @@ class ChatMessageOut(BaseModel):
 
 
 def _parse_owner(user_id: str) -> tuple[uuid.UUID | None, str | None]:
-    """Return ``(registered_user_uuid, guest_user_id)`` for an owner key."""
+    """Return ``(registered_user_uuid, guest_user_id)`` for an owner key.
+
+    The guest branch is legacy: JWT subjects must be UUIDs, so authenticated
+    callers always take the registered path. Kept so existing guest rows stay
+    readable by data tooling; no route can currently reach it with a token.
+    """
 
     try:
         return uuid.UUID(user_id), None
@@ -203,11 +209,12 @@ async def touch_session_on_message(
 @router.post("/sessions", response_model=SessionOut)
 async def create_session(
     body: CreateSessionRequest,
+    current_user: str = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> SessionOut:
     """Create a new chat session for a registered user or guest."""
 
-    registered_id, guest_id = _parse_owner(body.user_id)
+    registered_id, guest_id = _parse_owner(authorize_claimed_user(body.user_id, current_user))
     session = ChatSession(
         user_id=registered_id,
         guest_user_id=guest_id,
@@ -222,11 +229,13 @@ async def create_session(
 
 @router.get("/sessions", response_model=list[SessionOut])
 async def list_sessions(
-    user_id: str = Query(..., min_length=1),
+    user_id: str | None = Query(None),
+    current_user: str = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> list[SessionOut]:
     """List sessions for a user, most recently updated first."""
 
+    user_id = authorize_claimed_user(user_id, current_user)
     rows = (
         await db.execute(
             select(ChatSession)
@@ -240,12 +249,14 @@ async def list_sessions(
 @router.get("/sessions/{session_id}/history", response_model=list[ChatMessageOut])
 async def get_session_history(
     session_id: str,
-    user_id: str = Query(..., min_length=1),
+    user_id: str | None = Query(None),
+    current_user: str = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
     redis_client: redis.Redis = Depends(get_redis),
 ) -> list[ChatMessageOut]:
     """Return short-term chat history for a session from Redis."""
 
+    user_id = authorize_claimed_user(user_id, current_user)
     await _get_owned_session(session_id, user_id, db)
 
     session_key = f"session:{session_id}"
@@ -267,11 +278,13 @@ async def get_session_history(
 async def update_session(
     session_id: str,
     body: UpdateSessionRequest,
-    user_id: str = Query(..., min_length=1),
+    user_id: str | None = Query(None),
+    current_user: str = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> SessionOut:
     """Rename a chat session."""
 
+    user_id = authorize_claimed_user(user_id, current_user)
     session = await _get_owned_session(session_id, user_id, db)
     session.title = body.title.strip()
     session.updated_at = datetime.now(timezone.utc)
@@ -283,12 +296,14 @@ async def update_session(
 @router.delete("/sessions/{session_id}", response_model=DeleteSessionResponse)
 async def delete_session(
     session_id: str,
-    user_id: str = Query(..., min_length=1),
+    user_id: str | None = Query(None),
+    current_user: str = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
     redis_client: redis.Redis = Depends(get_redis),
 ) -> DeleteSessionResponse:
     """Delete a session and all memories extracted from that chat."""
 
+    user_id = authorize_claimed_user(user_id, current_user)
     session = await _get_owned_session(session_id, user_id, db)
 
     memory_count = (

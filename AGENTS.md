@@ -67,11 +67,32 @@ backend lives under `backend/`:
 - Beat: `celery -A celery_app beat --loglevel=info`.
 - Put secrets in repo-root `.env` for workers started in separate shells.
 
-### DashScope / Qwen (`app/core/dashscope_client.py`)
+### LLM provider layer (`app/core/llm/`, facade `app/core/dashscope_client.py`)
+
+- Any OpenAI-compatible API: set `LLM_BASE_URL`, `LLM_API_KEY`, `LLM_CHAT_MODEL`
+  (see `docs/LLM_PROVIDERS.md`). Without `LLM_BASE_URL` DashScope is used.
+- Keep importing `call_qwen_chat`, `stream_qwen_chat`, `get_embedding` etc. from
+  `app.core.dashscope_client`; tests patch those names.
+- Tests use `backend/tests/mock_openai_server.py` (fixture `mock_llm_server`).
+  Never put API keys in files; read from env only.
+- Embedding size is `EMBEDDING_DIM` (default 1024); see `docs/EMBEDDINGS.md`.
+
+### DashScope / Qwen (`app/core/llm/dashscope_provider.py`)
 
 - Set `DASHSCOPE_API_KEY` and `DASHSCOPE_BASE_URL` for international region
   (e.g. `https://dashscope-intl.aliyuncs.com/api/v1`).
 - Chat model: `qwen-plus` (not `qwen3-plus`). Embeddings: `text-embedding-v3` (1024 dims).
+
+### Health, metrics and deployment
+
+- `GET /health` is liveness; `GET /health/ready` checks Postgres and Redis
+  (503 on failure); `GET /metrics` is Prometheus text (`app/core/observability.py`).
+  Tests in `backend/tests/test_health_metrics.py` monkeypatch the checks, so no
+  services are needed.
+- Outside `ENVIRONMENT=dev` the app needs a random `SECRET_KEY` of 32+ chars.
+- Compose and Terraform pass `LLM_*`, `SECRET_KEY`, `ENVIRONMENT` through from the
+  environment; never put real values in files. See `docs/DEPLOYMENT.md`. The
+  Terraform and Compose files have not been executed in this repo's CI.
 
 ### Hackathon submission assets
 

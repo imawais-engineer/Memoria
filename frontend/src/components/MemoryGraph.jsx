@@ -197,7 +197,8 @@ export default function MemoryGraph({
               {memories.map((m) => (
                 <tr key={m.id}>
                   <td>
-                    <span className={`badge ${m.type}`}>{m.type}</span>
+                    <span className={`badge ${m.type}`}>{m.type}</span>{' '}
+                    {m.kind && <span className="muted">{m.kind}</span>}
                   </td>
                   <td>{m.content}</td>
                   <td>{m.importance.toFixed(2)}</td>

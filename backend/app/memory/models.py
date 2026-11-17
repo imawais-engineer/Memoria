@@ -58,6 +58,10 @@ class Memory(Base):
     embedding: Mapped[list[float]] = mapped_column(
         Vector(EMBEDDING_DIM), nullable=False
     )
+    # Coarse kind driving decay: 'fact', 'event' or 'preference'.
+    kind: Mapped[str] = mapped_column(
+        String, nullable=False, default="fact", server_default=text("'fact'")
+    )
     importance: Mapped[float] = mapped_column(Float, default=0.5)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()

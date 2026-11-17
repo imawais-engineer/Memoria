@@ -10,7 +10,9 @@ from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.dashscope_client import get_embedding
+from app.core.auth import authorize_claimed_user, get_current_user
 from app.core.database import get_db
+from app.services.limits import enforce_limits
 from app.memory.models import Memory
 from app.models.task import Task
 from app.models.user import User
@@ -19,7 +21,7 @@ router = APIRouter(prefix="/api", tags=["tasks"])
 
 
 class TaskCreateRequest(BaseModel):
-    user_id: str = Field(..., min_length=1)
+    user_id: str | None = None
     title: str = Field(..., min_length=1)
     description: str | None = None
 
@@ -54,16 +56,18 @@ async def _get_user_or_404(user_id: str, db: AsyncSession) -> User:
 @router.post("/tasks", response_model=TaskOut)
 async def create_task(
     body: TaskCreateRequest,
+    current_user: str = Depends(enforce_limits),
     db: AsyncSession = Depends(get_db),
 ) -> TaskOut:
     """Create a task and store a matching task memory."""
 
-    await _get_user_or_404(body.user_id, db)
+    user_id = authorize_claimed_user(body.user_id, current_user)
+    await _get_user_or_404(user_id, db)
     title = body.title.strip()
     description = body.description.strip() if body.description else None
 
     task = Task(
-        user_id=uuid.UUID(body.user_id),
+        user_id=uuid.UUID(user_id),
         title=title,
         description=description,
     )
@@ -73,7 +77,7 @@ async def create_task(
     embedding = await get_embedding(memory_content)
     db.add(
         Memory(
-            user_id=body.user_id,
+            user_id=user_id,
             type="task",
             content=memory_content,
             embedding=embedding,
@@ -95,11 +99,13 @@ async def create_task(
 
 @router.get("/tasks", response_model=list[TaskOut])
 async def list_tasks(
-    user_id: str = Query(..., min_length=1),
+    user_id: str | None = Query(None),
+    current_user: str = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> list[TaskOut]:
     """Return all tasks for a user, newest first."""
 
+    user_id = authorize_claimed_user(user_id, current_user)
     await _get_user_or_404(user_id, db)
     result = await db.execute(
         select(Task)
@@ -124,6 +130,7 @@ async def list_tasks(
 async def update_task(
     task_id: str,
     body: TaskUpdateRequest,
+    current_user: str = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> TaskOut:
     """Update task fields such as status."""
@@ -134,7 +141,7 @@ async def update_task(
         raise HTTPException(status_code=400, detail="Invalid task id")
 
     task = await db.get(Task, task_uuid)
-    if task is None:
+    if task is None or str(task.user_id) != current_user:
         raise HTTPException(status_code=404, detail="Task not found")
 
     if body.status is not None:
@@ -160,6 +167,7 @@ async def update_task(
 @router.delete("/tasks/{task_id}")
 async def delete_task(
     task_id: str,
+    current_user: str = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> dict[str, bool]:
     """Delete a task."""
@@ -169,7 +177,9 @@ async def delete_task(
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid task id")
 
-    result = await db.execute(delete(Task).where(Task.id == task_uuid))
+    result = await db.execute(delete(Task).where(
+            Task.id == task_uuid, Task.user_id == uuid.UUID(current_user)
+        ))
     if result.rowcount == 0:
         raise HTTPException(status_code=404, detail="Task not found")
     await db.commit()

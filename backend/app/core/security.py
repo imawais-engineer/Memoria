@@ -8,7 +8,7 @@ import secrets
 
 from fastapi import Header, HTTPException
 
-from app.config import get_settings
+from app.config import demo_token_enabled, get_settings
 
 _PREFIX = "scrypt"
 _SCRYPT_N = 2**14
@@ -72,9 +72,16 @@ def check_login_secret(secret: str, stored: str | None) -> bool:
 
 
 def require_token(x_api_token: str = Header(default="")) -> None:
-    """Fixed-token auth for destructive endpoints (demo only)."""
+    """Extra fixed-token guard for destructive endpoints (demo only).
 
-    expected = get_settings().demo_api_token
+    Applies only while ``ALLOW_DEMO_TOKEN`` is on (default in dev). It never
+    identifies a user; the JWT does that via ``get_current_user``.
+    """
+
+    settings = get_settings()
+    if not demo_token_enabled(settings):
+        return
+    expected = settings.demo_api_token
     if not hmac.compare_digest(
         x_api_token.encode("utf-8"), str(expected).encode("utf-8")
     ):

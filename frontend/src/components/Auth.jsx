@@ -58,6 +58,7 @@ export default function Auth({ onAuth, embedded = false }) {
       const data = await res.json()
       onAuth({
         user_id: data.user_id,
+        access_token: data.access_token,
         username: data.username,
         first_name: data.first_name || form.first_name.trim() || '',
         last_name: data.last_name || form.last_name.trim() || '',

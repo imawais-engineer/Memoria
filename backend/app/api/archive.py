@@ -10,6 +10,7 @@ from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.auth import authorize_claimed_user, get_current_user
 from app.core.security import require_token
 from app.core.database import get_db
 from app.models.chat_message import ChatMessage
@@ -38,12 +39,14 @@ def _owner_filter(user_id: str):
 
 @router.get("/search-archive", response_model=list[ArchiveMessageOut])
 async def search_archive(
-    user_id: str = Query(..., min_length=1),
+    user_id: str | None = Query(None),
+    current_user: str = Depends(get_current_user),
     query: str = Query(..., min_length=1),
     db: AsyncSession = Depends(get_db),
     _: None = Depends(require_token),
 ) -> list[ArchiveMessageOut]:
 
+    user_id = authorize_claimed_user(user_id, current_user)
     stmt = (
         select(ChatMessage)
         .join(ChatSession, ChatMessage.session_id == ChatSession.id)

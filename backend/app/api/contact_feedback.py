@@ -9,6 +9,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.auth import authorize_claimed_user, get_optional_user
 from app.core.database import get_db
 from app.models.contact_feedback import ContactFeedback
 
@@ -31,14 +32,16 @@ class ContactFeedbackResponse(BaseModel):
 @router.post("/contact-feedback", response_model=ContactFeedbackResponse)
 async def submit_contact_feedback(
     body: ContactFeedbackRequest,
+    current_user: str | None = Depends(get_optional_user),
     db: AsyncSession = Depends(get_db),
 ) -> ContactFeedbackResponse:
     """Store user feedback and log it for review."""
 
     user_uuid = None
-    if body.user_id:
+    if current_user:
+        authorize_claimed_user(body.user_id, current_user)
         try:
-            user_uuid = uuid.UUID(body.user_id)
+            user_uuid = uuid.UUID(current_user)
         except ValueError:
             raise HTTPException(status_code=400, detail="Invalid user id")
 

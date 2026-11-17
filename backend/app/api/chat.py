@@ -10,16 +10,18 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.auth import authorize_claimed_user
 from app.core.database import get_db
 from app.core.redis_client import get_redis
 from app.services.agent_service import handle_message, handle_message_stream
+from app.services.limits import Limiter, enforce_limits, estimate_tokens, get_limiter
 from app.services.usage import USAGE_LIMIT_MESSAGE, check_and_increment_usage
 
 router = APIRouter()
 
 
 class ChatRequest(BaseModel):
-    user_id: str
+    user_id: str | None = None
     message: str
     session_id: str | None = None
     is_memoryless: bool = False
@@ -47,15 +49,18 @@ async def _enforce_message_limit(db: AsyncSession, user_id: str) -> None:
 @router.post("/chat", response_model=ChatResponse, tags=["chat"])
 async def chat(
     body: ChatRequest,
+    current_user: str = Depends(enforce_limits),
+    limiter: Limiter = Depends(get_limiter),
     db: AsyncSession = Depends(get_db),
     redis_client: redis.Redis = Depends(get_redis),
 ) -> ChatResponse:
-    """Process one chat turn: retrieve memory, call Qwen, persist session."""
+    """Process one chat turn: retrieve memory, call the LLM, persist session."""
 
-    await _enforce_message_limit(db, body.user_id)
+    user_id = authorize_claimed_user(body.user_id, current_user)
+    await _enforce_message_limit(db, user_id)
 
     result = await handle_message(
-        body.user_id,
+        user_id,
         body.message,
         body.session_id,
         is_memoryless=body.is_memoryless,
@@ -63,23 +68,28 @@ async def chat(
         db_session=db,
         redis_client=redis_client,
     )
+    await limiter.add_tokens(user_id, estimate_tokens(body.message, result.get("reply", "")))
     return ChatResponse(**result)
 
 
 @router.post("/chat/stream", tags=["chat"])
 async def chat_stream(
     body: ChatRequest,
+    current_user: str = Depends(enforce_limits),
+    limiter: Limiter = Depends(get_limiter),
     db: AsyncSession = Depends(get_db),
     redis_client: redis.Redis = Depends(get_redis),
 ) -> StreamingResponse:
     """Stream one chat turn via Server-Sent Events."""
 
-    await _enforce_message_limit(db, body.user_id)
+    user_id = authorize_claimed_user(body.user_id, current_user)
+    await _enforce_message_limit(db, user_id)
 
     async def event_generator():
+        streamed = 0
         try:
             async for event in handle_message_stream(
-                body.user_id,
+                user_id,
                 body.message,
                 body.session_id,
                 is_memoryless=body.is_memoryless,
@@ -88,6 +98,7 @@ async def chat_stream(
                 redis_client=redis_client,
             ):
                 if event["type"] == "token":
+                    streamed += len(event["token"])
                     payload = {"token": event["token"]}
                 else:
                     payload = {
@@ -100,6 +111,14 @@ async def chat_stream(
                 yield f"data: {json.dumps(payload)}\n\n"
         except Exception as exc:  # noqa: BLE001
             yield f"data: {json.dumps({'error': str(exc)})}\n\n"
+        finally:
+            # Charge on success, error and client disconnect alike.
+            try:
+                await limiter.add_tokens(
+                    user_id, estimate_tokens(body.message) + streamed // 4
+                )
+            except Exception:  # noqa: BLE001
+                pass
 
     return StreamingResponse(
         event_generator(),

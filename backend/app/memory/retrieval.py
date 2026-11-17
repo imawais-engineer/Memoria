@@ -9,12 +9,14 @@ from __future__ import annotations
 
 import logging
 import uuid
+from datetime import datetime, timezone
 
 from sqlalchemy import Float, cast, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.dashscope_client import DEFAULT_EMBEDDING_MODEL, get_embedding
 from app.memory.models import Memory
+from app.memory.quality import build_why
 
 logger = logging.getLogger(__name__)
 
@@ -83,23 +85,20 @@ def _pack_memories(
     return entries, memories, used_tokens
 
 
-async def retrieve_context_and_ids(
+async def _fetch_scored(
     user_id: str,
     query_text: str,
-    max_tokens: int = 6000,
-    db_session: AsyncSession | None = None,
+    db_session: AsyncSession,
     *,
-    session_id: str | None = None,
-    is_memoryless: bool = False,
-    global_memory_enabled: bool = True,
-) -> tuple[str, list[str]]:
-    """Return packed context text and the IDs of memories included in it."""
-
-    if db_session is None:
-        raise ValueError("db_session is required")
+    session_id: str | None,
+    is_memoryless: bool,
+    global_memory_enabled: bool,
+    include_superseded: bool = False,
+) -> list[tuple[Memory, float]]:
+    """Return ``(memory, similarity)`` pairs ordered by recall score."""
 
     if is_memoryless:
-        return "", []
+        return []
 
     query_embedding = await get_embedding(query_text, model=DEFAULT_EMBEDDING_MODEL)
 
@@ -115,9 +114,10 @@ async def retrieve_context_and_ids(
     filters = [
         Memory.user_id == user_id,
         Memory.archived.is_(False),
-        Memory.superseded.is_(False),
         or_(Memory.expires_at.is_(None), Memory.expires_at > func.now()),
     ]
+    if not include_superseded:
+        filters.append(Memory.superseded.is_(False))
 
     if not global_memory_enabled:
         # Personal Intelligence OFF: current-session memories plus manually
@@ -126,7 +126,7 @@ async def retrieve_context_and_ids(
             try:
                 session_uuid = uuid.UUID(session_id)
             except ValueError:
-                return "", []
+                return []
             filters.append(
                 or_(
                     Memory.session_id == session_uuid,
@@ -139,14 +139,99 @@ async def retrieve_context_and_ids(
             )
 
     stmt = (
-        select(Memory, score)
+        select(Memory, similarity.label("similarity"))
         .where(*filters)
         .order_by(score.desc())
         .limit(CANDIDATE_LIMIT)
     )
 
     result = await db_session.execute(stmt)
-    candidates = [row[0] for row in result.all()]
+    return [(row[0], float(row[1] or 0.0)) for row in result.all()]
+
+
+def explain_memory(memory: Memory, similarity: float, now: datetime | None = None) -> dict:
+    """Build the ``why`` dict (similarity, recency, importance, kind) for a memory."""
+
+    now = now or datetime.now(timezone.utc)
+    created = memory.created_at or now
+    age_days = max((now - created).total_seconds(), 0.0) / 86400.0
+    return build_why(
+        similarity,
+        memory.importance if memory.importance is not None else 0.5,
+        memory.decay_rate or 0.0,
+        age_days,
+        memory.kind,
+        memory.type,
+    ).as_dict()
+
+
+async def retrieve_with_why(
+    user_id: str,
+    query_text: str,
+    max_tokens: int = 6000,
+    db_session: AsyncSession | None = None,
+    *,
+    session_id: str | None = None,
+    is_memoryless: bool = False,
+    global_memory_enabled: bool = True,
+    include_superseded: bool = False,
+) -> list[dict]:
+    """Return recalled memories, each with a ``why`` explanation.
+
+    Superseded memories are excluded unless ``include_superseded`` is true.
+    """
+
+    if db_session is None:
+        raise ValueError("db_session is required")
+
+    pairs = await _fetch_scored(
+        user_id,
+        query_text,
+        db_session,
+        session_id=session_id,
+        is_memoryless=is_memoryless,
+        global_memory_enabled=global_memory_enabled,
+        include_superseded=include_superseded,
+    )
+    sims = {m.id: s for m, s in pairs}
+    _, packed, _ = _pack_memories([m for m, _ in pairs], max_tokens)
+    return [
+        {
+            "id": str(m.id),
+            "type": m.type,
+            "kind": m.kind,
+            "content": m.content,
+            "superseded": bool(m.superseded),
+            "why": explain_memory(m, sims[m.id]),
+        }
+        for m in packed
+    ]
+
+
+async def retrieve_context_and_ids(
+    user_id: str,
+    query_text: str,
+    max_tokens: int = 6000,
+    db_session: AsyncSession | None = None,
+    *,
+    session_id: str | None = None,
+    is_memoryless: bool = False,
+    global_memory_enabled: bool = True,
+) -> tuple[str, list[str]]:
+    """Return packed context text and the IDs of memories included in it."""
+
+    if db_session is None:
+        raise ValueError("db_session is required")
+
+    pairs = await _fetch_scored(
+        user_id,
+        query_text,
+        db_session,
+        session_id=session_id,
+        is_memoryless=is_memoryless,
+        global_memory_enabled=global_memory_enabled,
+    )
+    candidates = [m for m, _ in pairs]
 
     if not candidates:
         return "", []
