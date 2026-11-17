@@ -15,7 +15,7 @@ from app.models.user import User
 
 
 @pytest.mark.asyncio
-async def test_memorize_creates_core_memory(db_session_factory):
+async def test_memorize_creates_core_memory(db_session_factory, user_auth):
     async with db_session_factory() as session:
         user = User(
             username="mem_user",
@@ -42,7 +42,9 @@ async def test_memorize_creates_core_memory(db_session_factory):
 
     with patch("app.api.memorize.get_embedding", new=AsyncMock(return_value=[0.1] * 1024)):
         transport = ASGITransport(app=app)
-        async with AsyncClient(transport=transport, base_url="http://test") as client:
+        async with AsyncClient(
+            transport=transport, base_url="http://test", auth=user_auth
+        ) as client:
             res = await client.post(
                 "/api/memorize",
                 json={"user_id": user_id, "content": "I love hiking"},
@@ -57,7 +59,7 @@ async def test_memorize_creates_core_memory(db_session_factory):
 
 
 @pytest.mark.asyncio
-async def test_create_and_list_tasks(db_session_factory):
+async def test_create_and_list_tasks(db_session_factory, user_auth):
     async with db_session_factory() as session:
         user = User(
             username="task_user",
@@ -78,7 +80,9 @@ async def test_create_and_list_tasks(db_session_factory):
 
     with patch("app.api.tasks.get_embedding", new=AsyncMock(return_value=[0.1] * 1024)):
         transport = ASGITransport(app=app)
-        async with AsyncClient(transport=transport, base_url="http://test") as client:
+        async with AsyncClient(
+            transport=transport, base_url="http://test", auth=user_auth
+        ) as client:
             create_res = await client.post(
                 "/api/tasks",
                 json={"user_id": user_id, "title": "Buy groceries"},
@@ -99,7 +103,7 @@ async def test_create_and_list_tasks(db_session_factory):
 
 
 @pytest.mark.asyncio
-async def test_chat_stream_endpoint(db_session_factory):
+async def test_chat_stream_endpoint(db_session_factory, user_auth):
     async with db_session_factory() as session:
         user = User(
             username="stream_user",
@@ -146,7 +150,9 @@ async def test_chat_stream_endpoint(db_session_factory):
         ),
     ):
         transport = ASGITransport(app=app)
-        async with AsyncClient(transport=transport, base_url="http://test") as client:
+        async with AsyncClient(
+            transport=transport, base_url="http://test", auth=user_auth
+        ) as client:
             res = await client.post(
                 "/chat/stream",
                 json={"user_id": user_id, "message": "Hi there"},
