@@ -36,6 +36,7 @@ async def migrated_session():
     factory = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
     async with factory() as session:
         yield session
+        await session.rollback()
         await session.execute(text("DELETE FROM memories WHERE user_id = :u"), {"u": USER_ID})
         await session.commit()
     await engine.dispose()
@@ -46,8 +47,8 @@ async def _insert(session, mtype: str, importance: float, rate: float, age_days:
     await session.execute(
         text(
             "INSERT INTO memories (id, user_id, type, content, embedding, importance, "
-            "decay_rate, created_at) VALUES (:id, :u, :t, 'x', CAST(:v AS vector), :imp, "
-            ":rate, NOW() - make_interval(days => :age))"
+            "decay_rate, metadata, created_at) VALUES (:id, :u, :t, 'x', CAST(:v AS vector), :imp, "
+            ":rate, '{}'::jsonb, NOW() - make_interval(days => :age))"
         ),
         {"id": mem_id, "u": USER_ID, "t": mtype, "v": VECTOR, "imp": importance,
          "rate": rate, "age": age_days},
